@@ -41,9 +41,10 @@ Read-Only:
 - `addresses` (Attributes List) Addresses of the running container, one per network. Empty while it is stopped; they may change when it restarts. (see [below for nested schema](#nestedatt--containers--addresses))
 - `cap_add` (Set of String) Linux capabilities to add, e.g. `CAP_NET_ADMIN`, or `ALL`.
 - `cap_drop` (Set of String) Linux capabilities to drop, e.g. `CAP_MKNOD`, or `ALL`.
-- `command` (List of String) The process to run, as a full argument list (its first element replaces the image's entrypoint). Defaults to the image's entrypoint and command.
+- `command` (List of String) Arguments to the entrypoint, like Docker's `CMD` and Kubernetes' `args`; for an image without an entrypoint, the whole process. Defaults to the image's command.
 - `cpus` (Number) Number of CPUs. Defaults to the runtime's `container.cpus` property.
 - `dns` (Attributes) Resolver configuration. The runtime's defaults apply to whatever is not set. (see [below for nested schema](#nestedatt--containers--dns))
+- `entrypoint` (List of String) Executable and leading arguments that replace the image's entrypoint; the image's command is then dropped too, as with Docker. Defaults to the image's entrypoint (null if it has none).
 - `env` (Map of String) Environment variables, on top of the image's environment.
 - `id` (String) The container's name.
 - `image` (String) Image reference, resolved like `espalier_image`'s `name`. The runtime pulls it if it is missing; use `espalier_image` to control pulling and pin versions.

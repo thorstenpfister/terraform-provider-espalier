@@ -157,3 +157,64 @@ func checkContainersGone(names ...string) resource.TestCheckFunc {
 		return nil
 	}
 }
+
+// An image with an entrypoint, which command passes arguments to.
+const entrypointImage = "registry.k8s.io/pause:3.10"
+
+func entrypointConfig(extra string) string {
+	return fmt.Sprintf(`
+resource "espalier_container" "test" {
+  name    = "espalier-test-entrypoint"
+  image   = %q
+  running = false
+  %s
+}`, entrypointImage, extra)
+}
+
+func TestAccContainerEntrypoint(t *testing.T) {
+	addr := "espalier_container.test"
+	pulled := newImages(t, entrypointImage)
+	list := func(values ...string) knownvalue.Check {
+		checks := make([]knownvalue.Check, len(values))
+		for i, v := range values {
+			checks[i] = knownvalue.StringExact(v)
+		}
+		return knownvalue.ListExact(checks)
+	}
+	process := func(entrypoint, command knownvalue.Check) []statecheck.StateCheck {
+		return []statecheck.StateCheck{
+			statecheck.ExpectKnownValue(addr, tfjsonpath.New("entrypoint"), entrypoint),
+			statecheck.ExpectKnownValue(addr, tfjsonpath.New("command"), command),
+		}
+	}
+	replaces := resource.ConfigPlanChecks{PreApply: []plancheck.PlanCheck{
+		plancheck.ExpectResourceAction(addr, plancheck.ResourceActionDestroyBeforeCreate),
+	}}
+	resource.Test(t, resource.TestCase{
+		ProtoV6ProviderFactories: testAccProviders,
+		CheckDestroy: func(s *terraform.State) error {
+			if err := checkContainersGone("espalier-test-entrypoint")(s); err != nil {
+				return err
+			}
+			return deleteImages(pulled)
+		},
+		Steps: []resource.TestStep{
+			// The image's entrypoint, which has no command.
+			{Config: entrypointConfig(""), ConfigStateChecks: process(list("/pause"), knownvalue.Null())},
+			// Arguments go to the image's entrypoint.
+			{
+				Config:            entrypointConfig(`command = ["-v"]`),
+				ConfigPlanChecks:  replaces,
+				ConfigStateChecks: process(list("/pause"), list("-v")),
+			},
+			{ResourceName: addr, ImportState: true, ImportStateVerify: true, ImportStateVerifyIgnore: []string{"image"}},
+			// A replaced entrypoint is kept as written.
+			{
+				Config: entrypointConfig(`entrypoint = ["/bin/sh", "-c"]
+  command    = ["echo hi"]`),
+				ConfigPlanChecks:  replaces,
+				ConfigStateChecks: process(list("/bin/sh", "-c"), list("echo hi")),
+			},
+		},
+	})
+}

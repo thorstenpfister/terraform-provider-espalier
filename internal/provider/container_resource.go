@@ -5,8 +5,10 @@ import (
 	"fmt"
 	"maps"
 	"regexp"
+	"slices"
 	"strconv"
 
+	"github.com/hashicorp/terraform-plugin-framework-validators/listvalidator"
 	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
 	"github.com/hashicorp/terraform-plugin-framework/attr"
 	"github.com/hashicorp/terraform-plugin-framework/diag"
@@ -34,6 +36,7 @@ type containerModel struct {
 	ID             types.String `tfsdk:"id"`
 	Name           types.String `tfsdk:"name"`
 	Image          types.String `tfsdk:"image"`
+	Entrypoint     types.List   `tfsdk:"entrypoint"`
 	Command        types.List   `tfsdk:"command"`
 	Env            types.Map    `tfsdk:"env"`
 	Workdir        types.String `tfsdk:"workdir"`
@@ -125,9 +128,21 @@ func (r *containerResource) Schema(_ context.Context, _ resource.SchemaRequest, 
 					"if it is missing; use `espalier_image` to control pulling and pin versions.",
 				Required: true, // replaced in ModifyPlan
 			},
+			"entrypoint": schema.ListAttribute{
+				MarkdownDescription: "Executable and leading arguments that replace the image's entrypoint; the " +
+					"image's command is then dropped too, as with Docker. Defaults to the image's entrypoint (null " +
+					"if it has none).",
+				ElementType: types.StringType,
+				Optional:    true,
+				Computed:    true,
+				Validators:  []validator.List{listvalidator.SizeAtLeast(1)},
+				PlanModifiers: []planmodifier.List{
+					listplanmodifier.RequiresReplaceIfConfigured(), listplanmodifier.UseStateForUnknown(),
+				},
+			},
 			"command": schema.ListAttribute{
-				MarkdownDescription: "The process to run, as a full argument list (its first element replaces the " +
-					"image's entrypoint). Defaults to the image's entrypoint and command.",
+				MarkdownDescription: "Arguments to the entrypoint, like Docker's `CMD` and Kubernetes' `args`; for an " +
+					"image without an entrypoint, the whole process. Defaults to the image's command.",
 				ElementType: types.StringType,
 				Optional:    true,
 				Computed:    true,
@@ -228,6 +243,9 @@ func (r *containerResource) Create(ctx context.Context, req resource.CreateReque
 		Workdir: plan.Workdir.ValueString(), // "" when unknown: the default
 		CPUs:    plan.CPUs.ValueInt64(),
 		Memory:  plan.Memory.ValueString(),
+	}
+	if !plan.Entrypoint.IsUnknown() {
+		resp.Diagnostics.Append(plan.Entrypoint.ElementsAs(ctx, &spec.Entrypoint, false)...)
 	}
 	if !plan.Command.IsUnknown() {
 		resp.Diagnostics.Append(plan.Command.ElementsAs(ctx, &spec.Command, false)...)
@@ -345,6 +363,7 @@ func (r *containerResource) read(ctx context.Context, name string, prior contain
 		m.Memory = prior.Memory
 	}
 	keepWrittenOptions(prior, &m)
+	keepWrittenEntrypoint(ctx, c, prior, &m, diags)
 	diags.Append(st.Set(ctx, &m)...)
 }
 
@@ -367,8 +386,7 @@ func containerValue(ctx context.Context, c *client.Container, diags *diag.Diagno
 	readAttachments(ctx, c, &m, diags)
 	readOptions(ctx, c, &m, diags)
 	var d diag.Diagnostics
-	m.Command, d = types.ListValueFrom(ctx, types.StringType, c.Command)
-	diags.Append(d...)
+	m.Entrypoint, m.Command = stringList(ctx, c.Entrypoint, diags), stringList(ctx, c.Command, diags)
 	addresses := make([]addressModel, 0, len(c.Addresses))
 	for _, a := range c.Addresses {
 		addresses = append(addresses, addressModel{
@@ -472,4 +490,20 @@ func keepObserved(ctx context.Context, plan, state containerModel, prior tfsdk.S
 	if unchanged.Raw.Equal(prior.Raw) {
 		resp.Plan = unchanged
 	}
+}
+
+// keepWrittenEntrypoint splits the process at the entrypoint as written, if
+// it still starts with it: the runtime reports only the whole process, which
+// the client splits at the image's entrypoint.
+func keepWrittenEntrypoint(ctx context.Context, c *client.Container, prior containerModel, m *containerModel, diags *diag.Diagnostics) {
+	if prior.Entrypoint.IsNull() || prior.Entrypoint.IsUnknown() {
+		return
+	}
+	var written []string
+	diags.Append(prior.Entrypoint.ElementsAs(ctx, &written, false)...)
+	ep, args := client.SplitProcess(append(slices.Clone(c.Entrypoint), c.Command...), written)
+	if !slices.Equal(ep, written) {
+		return
+	}
+	m.Entrypoint, m.Command = stringList(ctx, ep, diags), stringList(ctx, args, diags)
 }

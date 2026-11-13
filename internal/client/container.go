@@ -12,19 +12,23 @@ import (
 // ContainerSpec is what a container is created with. Zero values leave the
 // choice to the image or the runtime's defaults.
 type ContainerSpec struct {
-	Name     string
-	Image    string
-	Command  []string          // full argv; nil for the image's entrypoint and command
-	Env      map[string]string // on top of the image's environment
-	Workdir  string
-	CPUs     int64
-	Memory   string // e.g. "512M"
-	Labels   map[string]string
-	Networks []NetworkAttachment // nil attaches the runtime's default network
-	Mounts   []Mount
-	Ports    []Port
-	CapAdd   []string
-	CapDrop  []string
+	Name  string
+	Image string
+	// Entrypoint replaces the image's entrypoint, and then its command too;
+	// nil keeps it. Command is the arguments to the entrypoint; nil keeps
+	// the image's.
+	Entrypoint []string
+	Command    []string
+	Env        map[string]string // on top of the image's environment
+	Workdir    string
+	CPUs       int64
+	Memory     string // e.g. "512M"
+	Labels     map[string]string
+	Networks   []NetworkAttachment // nil attaches the runtime's default network
+	Mounts     []Mount
+	Ports      []Port
+	CapAdd     []string
+	CapDrop    []string
 
 	Platform       string // e.g. "linux/arm64"; empty for the image's
 	User           string // name|uid[:gid]; empty for the image's
@@ -273,13 +277,14 @@ func (c CLI) CreateContainer(ctx context.Context, spec ContainerSpec) error {
 		args = append(args, "--cap-drop", cap)
 	}
 	args = append(args, spec.optionArgs()...)
-	if len(spec.Command) > 0 {
-		args = append(args, "--entrypoint", spec.Command[0])
+	if len(spec.Entrypoint) > 0 {
+		args = append(args, "--entrypoint", spec.Entrypoint[0])
 	}
 	args = append(args, spec.Image)
-	if len(spec.Command) > 1 {
-		args = append(args, spec.Command[1:]...)
+	if len(spec.Entrypoint) > 1 {
+		args = append(args, spec.Entrypoint[1:]...)
 	}
+	args = append(args, spec.Command...)
 	_, err := c.Run(ctx, args...)
 	return err
 }
@@ -390,7 +395,6 @@ func (j containerJSON) container(images []imageJSON) Container {
 		ContainerSpec: ContainerSpec{
 			Name:    j.ID,
 			Image:   cfg.Image.Reference,
-			Command: append([]string{cfg.InitProcess.Executable}, cfg.InitProcess.Arguments...),
 			Env:     map[string]string{},
 			Workdir: cfg.InitProcess.WorkingDirectory,
 			CPUs:    cfg.Resources.CPUs,
@@ -402,6 +406,7 @@ func (j containerJSON) container(images []imageJSON) Container {
 		ShmSizeBytes: cfg.ShmSize,
 		State:        j.Status.State,
 	}
+	ctr.Entrypoint, ctr.Command = SplitProcess(append([]string{cfg.InitProcess.Executable}, cfg.InitProcess.Arguments...), defaults.Entrypoint)
 	ctr.Platform = cfg.Platform.String()
 	ctr.ReadOnly, ctr.Init, ctr.Rosetta, ctr.SSH = cfg.ReadOnly, cfg.UseInit, cfg.Rosetta, cfg.SSH
 	ctr.TTY = cfg.InitProcess.Terminal
@@ -484,7 +489,23 @@ func (p platformJSON) String() string {
 // imageDefaults is the part of an image's configuration a container
 // inherits.
 type imageDefaults struct {
-	Env []string `json:"Env"`
+	Env        []string `json:"Env"`
+	Entrypoint []string `json:"Entrypoint"`
+}
+
+// SplitProcess splits a process's argument list into the entrypoint and its
+// arguments: the given entrypoint if the process starts with it, else the
+// executable. Without an entrypoint the arguments are the whole list, as for
+// an image without one.
+func SplitProcess(argv, entrypoint []string) (ep, args []string) {
+	switch {
+	case len(entrypoint) == 0:
+		return nil, argv
+	case len(argv) >= len(entrypoint) && slices.Equal(argv[:len(entrypoint)], entrypoint):
+		return argv[:len(entrypoint)], argv[len(entrypoint):]
+	default:
+		return argv[:1], argv[1:]
+	}
 }
 
 // imageConfig returns the configuration of the image variant a container

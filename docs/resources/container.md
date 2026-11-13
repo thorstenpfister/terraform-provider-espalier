@@ -89,9 +89,10 @@ resource "espalier_container" "worker" {
 
 - `cap_add` (Set of String) Linux capabilities to add, e.g. `CAP_NET_ADMIN`, or `ALL`.
 - `cap_drop` (Set of String) Linux capabilities to drop, e.g. `CAP_MKNOD`, or `ALL`.
-- `command` (List of String) The process to run, as a full argument list (its first element replaces the image's entrypoint). Defaults to the image's entrypoint and command.
+- `command` (List of String) Arguments to the entrypoint, like Docker's `CMD` and Kubernetes' `args`; for an image without an entrypoint, the whole process. Defaults to the image's command.
 - `cpus` (Number) Number of CPUs. Defaults to the runtime's `container.cpus` property.
 - `dns` (Attributes) Resolver configuration. The runtime's defaults apply to whatever is not set. (see [below for nested schema](#nestedatt--dns))
+- `entrypoint` (List of String) Executable and leading arguments that replace the image's entrypoint; the image's command is then dropped too, as with Docker. Defaults to the image's entrypoint (null if it has none).
 - `env` (Map of String) Environment variables, on top of the image's environment.
 - `init` (Boolean) Run an init process that forwards signals and reaps zombies. Defaults to `false`.
 - `init_image` (String) Image of the VM's init system, instead of the runtime's `vminit` image. Not reported, like `kernel`.

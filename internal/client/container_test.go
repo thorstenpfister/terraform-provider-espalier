@@ -107,19 +107,20 @@ func TestCreateContainerArgs(t *testing.T) {
 		return nil, nil
 	}
 	err := CLI{Run: run}.CreateContainer(context.Background(), ContainerSpec{
-		Name:     "probe",
-		Image:    "docker.io/library/busybox:1.37",
-		Command:  []string{"/bin/sh", "-c", "sleep 3600"},
-		Env:      map[string]string{"FOO": "bar"},
-		Workdir:  "/tmp",
-		CPUs:     2,
-		Memory:   "256M",
-		Labels:   map[string]string{"a": "b"},
-		Networks: []NetworkAttachment{{Network: "net", MAC: "02:42:ac:11:00:02", MTU: 1400, Aliases: []string{"probe.espalier.test"}}, {Network: "default"}},
-		Mounts:   []Mount{{Type: MountVolume, Source: "v", Target: "/data"}, {Type: MountBind, Source: "/host/dir", Target: "/bind", ReadOnly: true}, {Type: MountTmpfs, Target: "/scratch"}},
-		Ports:    []Port{{HostIP: "127.0.0.1", HostPort: 18081, ContainerPort: 80, Protocol: "tcp"}, {HostPort: 5353, ContainerPort: 53, Protocol: "udp"}},
-		CapAdd:   []string{"CAP_NET_RAW"},
-		CapDrop:  []string{"CAP_MKNOD"},
+		Name:       "probe",
+		Image:      "docker.io/library/busybox:1.37",
+		Entrypoint: []string{"/bin/sh", "-c"},
+		Command:    []string{"sleep 3600"},
+		Env:        map[string]string{"FOO": "bar"},
+		Workdir:    "/tmp",
+		CPUs:       2,
+		Memory:     "256M",
+		Labels:     map[string]string{"a": "b"},
+		Networks:   []NetworkAttachment{{Network: "net", MAC: "02:42:ac:11:00:02", MTU: 1400, Aliases: []string{"probe.espalier.test"}}, {Network: "default"}},
+		Mounts:     []Mount{{Type: MountVolume, Source: "v", Target: "/data"}, {Type: MountBind, Source: "/host/dir", Target: "/bind", ReadOnly: true}, {Type: MountTmpfs, Target: "/scratch"}},
+		Ports:      []Port{{HostIP: "127.0.0.1", HostPort: 18081, ContainerPort: 80, Protocol: "tcp"}, {HostPort: 5353, ContainerPort: 53, Protocol: "udp"}},
+		CapAdd:     []string{"CAP_NET_RAW"},
+		CapDrop:    []string{"CAP_MKNOD"},
 
 		Platform:       "linux/arm64",
 		User:           "1000:1000",
@@ -171,5 +172,24 @@ func TestContainerNoDNS(t *testing.T) {
 	}
 	if !got.NoDNS || !reflect.DeepEqual(got.DNS, DNS{}) || got.User != "1000:100" {
 		t.Errorf("got NoDNS %t, DNS %+v, User %q; want true, empty, 1000:100", got.NoDNS, got.DNS, got.User)
+	}
+}
+
+func TestSplitProcess(t *testing.T) {
+	for _, tc := range []struct {
+		argv, entrypoint, wantEP, wantArgs []string
+	}{
+		// No entrypoint: all of it is the command.
+		{[]string{"sh"}, nil, nil, []string{"sh"}},
+		{[]string{"/coredns", "-conf", "/c"}, []string{"/coredns"}, []string{"/coredns"}, []string{"-conf", "/c"}},
+		{[]string{"/tini", "--", "app"}, []string{"/tini", "--"}, []string{"/tini", "--"}, []string{"app"}},
+		// Replaced: the executable is the entrypoint.
+		{[]string{"/bin/sh", "-c", "x"}, []string{"/coredns"}, []string{"/bin/sh"}, []string{"-c", "x"}},
+		{[]string{"/tini"}, []string{"/tini", "--"}, []string{"/tini"}, []string{}},
+	} {
+		ep, args := SplitProcess(tc.argv, tc.entrypoint)
+		if !reflect.DeepEqual(ep, tc.wantEP) || !reflect.DeepEqual(args, tc.wantArgs) {
+			t.Errorf("SplitProcess(%q, %q) = %q, %q; want %q, %q", tc.argv, tc.entrypoint, ep, args, tc.wantEP, tc.wantArgs)
+		}
 	}
 }
