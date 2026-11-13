@@ -112,6 +112,7 @@ func (p *espalierProvider) Resources(context.Context) []func() resource.Resource
 		NewImageBuildResource,
 		NewContainerResource,
 		NewMachineResource,
+		NewClusterResource,
 	}
 }
 

@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"os"
 	"os/exec"
 	"strings"
 )
@@ -25,11 +26,24 @@ func (e *ExitError) Error() string {
 	return fmt.Sprintf("container %s: exit %d: %s", strings.Join(e.Args, " "), e.Code, e.Stderr)
 }
 
-// ExecRunner runs the binary at path (looked up on PATH if it has no slash).
+type envKey struct{}
+
+// WithEnv returns a context whose CLI invocations get these environment
+// variables (KEY=value) in addition to the provider's.
+func WithEnv(ctx context.Context, env ...string) context.Context {
+	prior, _ := ctx.Value(envKey{}).([]string)
+	return context.WithValue(ctx, envKey{}, append(append([]string(nil), prior...), env...))
+}
+
+// ExecRunner runs the binary at path (looked up on PATH if it has no slash),
+// with the environment from WithEnv.
 func ExecRunner(path string) Runner {
 	return func(ctx context.Context, args ...string) ([]byte, error) {
 		var stdout, stderr bytes.Buffer
 		cmd := exec.CommandContext(ctx, path, args...)
+		if env, ok := ctx.Value(envKey{}).([]string); ok {
+			cmd.Env = append(os.Environ(), env...)
+		}
 		cmd.Stdout, cmd.Stderr = &stdout, &stderr
 		err := cmd.Run()
 		var exit *exec.ExitError

@@ -1,8 +1,8 @@
 # terraform-provider-espalier
 
 A Terraform and OpenTofu provider for **Apple's [`container`](https://github.com/apple/container)
-runtime** on macOS: manage its networks, volumes, images and containers
-declaratively, for any local workload.
+runtime** on macOS: manage its networks, volumes, images, containers, machines
+and local Kubernetes clusters declaratively.
 
 > **Why "espalier"?** An espalier is a fruit tree trained to grow flat along a
 > frame: structure declared for something that grows on its own, which is
@@ -27,6 +27,7 @@ Available today:
 | Resource | `espalier_container` | Image, command, env, workdir, CPUs, memory, labels; networks (MAC, MTU, aliases), bind/volume/tmpfs mounts, published ports, capabilities; platform, user, read-only root, DNS, init, Rosetta, SSH agent, `/dev/shm`, ulimits, published sockets, `http` registries; VM: custom kernel and arguments, init image, runtime handler, nested virtualization, read-only/masked paths (experimental); running state, addresses; import by name |
 | Data source | `espalier_container` | Existing container, as the resource describes it |
 | Resource | `espalier_machine` | Container machine (long-lived dev VM): image, platform, account, CPUs, memory, home mount, nested virtualization, kernel, default machine, running state; settings change in place; import by name |
+| Resource | `espalier_cluster` | Local Kubernetes cluster (experimental in the runtime): node image, control-plane size, worker groups, CNI or none; kubeconfig and admin credentials for the `kubernetes`/`helm` providers, never touching `~/.kube/config`; create timeout that cleans up; replaced when degraded (e.g. after a runtime restart); import by name |
 | Data sources | `espalier_networks`, `espalier_volumes`, `espalier_containers`, `espalier_images` | Everything of one kind, sorted by name; filter by labels (not images) |
 
 Blocked upstream: registry logins (`container registry login`). The runtime stores the

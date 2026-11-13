@@ -59,6 +59,13 @@ type Client interface {
 	// Machine returns nil, without an error, if the machine does not exist.
 	Machine(ctx context.Context, name string) (*Machine, error)
 	DeleteMachine(ctx context.Context, name string) error
+
+	// CreateCluster waits until the cluster is ready, or ctx is done.
+	CreateCluster(ctx context.Context, spec ClusterSpec) error
+	// Cluster returns nil, without an error, if the cluster does not exist.
+	Cluster(ctx context.Context, name string) (*Cluster, error)
+	ClusterKubeconfig(ctx context.Context, name string) ([]byte, error)
+	DeleteCluster(ctx context.Context, name string) error
 }
 
 // System describes the runtime on this host.

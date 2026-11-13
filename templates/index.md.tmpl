@@ -7,7 +7,8 @@ description: |-
 # espalier provider
 
 Manage resources of [Apple's `container` runtime](https://github.com/apple/container)
-on macOS: networks, volumes, images and containers. The provider drives the
+on macOS: networks, volumes, images, containers, machines and local Kubernetes
+clusters. The provider drives the
 `container` command line tool, which must be installed; it never starts the
 runtime itself (`container system start`).
 
