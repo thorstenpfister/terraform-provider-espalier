@@ -51,7 +51,10 @@ func TestMachineArgs(t *testing.T) {
 	c := CLI{Run: run}
 	uid, gid, on := int64(1000), int64(0), true
 	ctx := context.Background()
-	if err := c.CreateMachine(ctx, MachineSpec{Name: "dev", Image: "alpine:3.22", Platform: "linux/arm64", User: "dev", UID: &uid, GID: &gid, Home: "/home/dev", Scheme: "http", SetDefault: true}); err != nil {
+	if err := c.CreateMachine(ctx, MachineSpec{Name: "dev", Image: "alpine:3.22", Platform: "linux/arm64", User: "dev", UID: &uid, GID: &gid, Home: "/home/dev", Scheme: "http", SetDefault: true, Boot: true}); err != nil {
+		t.Fatal(err)
+	}
+	if err := c.CreateMachine(ctx, MachineSpec{Name: "dev2", Image: "alpine:3.22", Settings: MachineSettings{CPUs: 2, Memory: "4G", HomeMount: "ro", Virtualization: &on, Kernel: "/k"}}); err != nil {
 		t.Fatal(err)
 	}
 	if err := c.SetMachine(ctx, "dev", MachineSettings{CPUs: 2, Memory: "4G", HomeMount: "ro", Virtualization: &on, Kernel: "/k"}); err != nil {
@@ -65,6 +68,7 @@ func TestMachineArgs(t *testing.T) {
 	}
 	want := []string{
 		"machine create --name dev --progress none --platform linux/arm64 --user dev --home /home/dev --scheme http --uid 1000 --gid 0 --set-default alpine:3.22",
+		"machine create --name dev2 --progress none --cpus 2 --memory 4G --home-mount ro --kernel /k --virtualization --no-boot alpine:3.22",
 		"machine set --name dev cpus=2 memory=4G home-mount=ro kernel=/k virtualization=true",
 		"machine run --name dev true",
 	}

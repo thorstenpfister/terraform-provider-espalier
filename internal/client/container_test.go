@@ -12,7 +12,7 @@ import (
 const containersJSON = `[{"id":"probe","configuration":{
 "capAdd":["CAP_NET_RAW"],"capDrop":["CAP_MKNOD"],"id":"probe",
 "image":{"reference":"docker.io/library/busybox:1.37"},
-"initProcess":{"arguments":["-c","sleep 3600"],"environment":["PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin","FOO=bar"],"executable":"/bin/sh","workingDirectory":"/tmp",
+"initProcess":{"arguments":["-c","sleep 3600"],"environment":["PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin","FOO=bar"],"executable":"/bin/sh","workingDirectory":"/tmp","terminal":true,
  "user":{"raw":{"userString":"1000:1000"}},"rlimits":[{"hard":2048,"limit":"RLIMIT_NOFILE","soft":1024}]},
 "labels":{"a":"b"},
 "mounts":[
@@ -76,6 +76,7 @@ func TestContainer(t *testing.T) {
 			Init:           true,
 			Rosetta:        true,
 			SSH:            true,
+			TTY:            true,
 			Ulimits:        []Ulimit{{Name: "nofile", Soft: 1024, Hard: 2048}},
 			PublishSockets: []Socket{{HostPath: "/host/s.sock", ContainerPath: "/run/s.sock"}},
 			Runtime:        "container-runtime-linux",
@@ -134,6 +135,7 @@ func TestCreateContainerArgs(t *testing.T) {
 		InitImage:      "vminit:1",
 		Runtime:        "container-runtime-linux",
 		Virtualization: true,
+		TTY:            true,
 		ReadOnlyPaths:  []string{"/opt"},
 		MaskedPaths:    []string{"NONE", "/secret"},
 	})
@@ -146,7 +148,7 @@ func TestCreateContainerArgs(t *testing.T) {
 		" --publish 127.0.0.1:18081:80/tcp --publish 5353:53/udp" +
 		" --cap-add CAP_NET_RAW --cap-drop CAP_MKNOD" +
 		" --platform linux/arm64 --user 1000:1000 --shm-size 128M --scheme http" +
-		" --kernel /k/vmlinux --init-image vminit:1 --runtime container-runtime-linux --read-only --init --no-dns --virtualization" +
+		" --kernel /k/vmlinux --init-image vminit:1 --runtime container-runtime-linux --read-only --init --no-dns --virtualization --tty" +
 		" --ulimit nofile=1024:2048 --publish-socket /host/s.sock:/run/s.sock" +
 		" --kernel-arg quiet --kernel-arg loglevel=3 --read-only-path /opt --masked-path NONE --masked-path /secret" +
 		" --entrypoint /bin/sh docker.io/library/busybox:1.37 -c sleep 3600"

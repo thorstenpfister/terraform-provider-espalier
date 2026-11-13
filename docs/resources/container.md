@@ -114,6 +114,7 @@ resource "espalier_container" "worker" {
 - `scheme` (String) Registry scheme, `http` or `https`, for pulling the image if it is missing, e.g. `http` for a local registry without TLS. Defaults to `https`. Only used when pulling: the runtime does not record it, and changing it does not replace the container.
 - `shm_size` (String) Size of `/dev/shm`, with an optional `K`, `M`, `G`, `T` or `P` suffix. Defaults to the runtime's.
 - `ssh` (Boolean) Forward the host's SSH agent socket into the container. Defaults to `false`.
+- `tty` (Boolean) Give the process a terminal, e.g. to keep `sh` running as the command. Nothing attaches to it, so there is no `interactive`: standard input stays closed. Defaults to `false`.
 - `ulimits` (Attributes List) Resource limits of the process. (see [below for nested schema](#nestedatt--ulimits))
 - `user` (String) User of the process, as `name`, `uid` or `uid:gid`. Defaults to the image's, else `0:0`.
 - `virtualization` (Boolean) Expose virtualization to the container, for nested VMs; needs host and kernel support. Defaults to `false`.

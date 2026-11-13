@@ -109,6 +109,8 @@ func optionAttributes() map[string]schema.Attribute {
 		"init":      off("Run an init process that forwards signals and reaps zombies."),
 		"rosetta":   off("Enable Rosetta, to run x86-64 binaries."),
 		"ssh":       off("Forward the host's SSH agent socket into the container."),
+		"tty": off("Give the process a terminal, e.g. to keep `sh` running as the command. Nothing attaches to " +
+			"it, so there is no `interactive`: standard input stays closed."),
 		"no_dns": off("Leave the container without any DNS configuration (`--no-dns`). Conflicts with `dns`. " +
 			"Without either, the runtime configures its own resolver."),
 		"dns": schema.SingleNestedAttribute{
@@ -221,7 +223,7 @@ func optionsSpec(ctx context.Context, plan containerModel, spec *client.Containe
 	spec.ShmSize = plan.ShmSize.ValueString()
 	spec.Scheme = plan.Scheme.ValueString()
 	spec.Kernel, spec.InitImage, spec.Runtime = plan.Kernel.ValueString(), plan.InitImage.ValueString(), plan.Runtime.ValueString()
-	spec.Virtualization = plan.Virtualization.ValueBool()
+	spec.Virtualization, spec.TTY = plan.Virtualization.ValueBool(), plan.TTY.ValueBool()
 	diags.Append(plan.KernelArgs.ElementsAs(ctx, &spec.KernelArgs, false)...)
 	diags.Append(plan.ReadOnlyPaths.ElementsAs(ctx, &spec.ReadOnlyPaths, false)...)
 	diags.Append(plan.MaskedPaths.ElementsAs(ctx, &spec.MaskedPaths, false)...)
@@ -260,7 +262,7 @@ func readOptions(ctx context.Context, c *client.Container, m *containerModel, di
 	}
 	m.Scheme = types.StringNull()
 	m.Kernel, m.KernelArgs, m.InitImage = types.StringNull(), types.ListNull(types.StringType), types.StringNull()
-	m.Runtime, m.Virtualization = types.StringValue(c.Runtime), types.BoolValue(c.Virtualization)
+	m.Runtime, m.Virtualization, m.TTY = types.StringValue(c.Runtime), types.BoolValue(c.Virtualization), types.BoolValue(c.TTY)
 	m.ReadOnlyPaths, d = pathList(ctx, c.ReadOnlyPaths)
 	diags.Append(d...)
 	m.MaskedPaths, d = pathList(ctx, c.MaskedPaths)

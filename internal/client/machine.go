@@ -8,7 +8,8 @@ import (
 )
 
 // MachineSpec is what a container machine is created with: a long-lived
-// VM made from an image, with an account for a host user.
+// VM made from an image, with an account for a host user, and its initial
+// settings.
 type MachineSpec struct {
 	Name       string
 	Image      string
@@ -18,6 +19,8 @@ type MachineSpec struct {
 	Home       string // empty for /home/<user>
 	Scheme     string // registry scheme for pulling the image; not recorded
 	SetDefault bool   // make it the default machine
+	Settings   MachineSettings
+	Boot       bool // start it once created
 }
 
 // MachineSettings can change after creation; they take effect when the
@@ -94,6 +97,21 @@ func (c CLI) CreateMachine(ctx context.Context, spec MachineSpec) error {
 	}
 	if spec.SetDefault {
 		args = append(args, "--set-default")
+	}
+	st := spec.Settings
+	if st.CPUs != 0 {
+		args = append(args, "--cpus", strconv.FormatInt(st.CPUs, 10))
+	}
+	for _, f := range [][2]string{{"--memory", st.Memory}, {"--home-mount", st.HomeMount}, {"--kernel", st.Kernel}} {
+		if f[1] != "" {
+			args = append(args, f[0], f[1])
+		}
+	}
+	if st.Virtualization != nil && *st.Virtualization {
+		args = append(args, "--virtualization")
+	}
+	if !spec.Boot {
+		args = append(args, "--no-boot")
 	}
 	_, err := c.Run(ctx, append(args, spec.Image)...)
 	return err

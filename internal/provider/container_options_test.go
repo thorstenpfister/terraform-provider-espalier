@@ -230,6 +230,31 @@ func checkKernelArg(name, arg string) resource.TestCheckFunc {
 	}
 }
 
+// With a terminal, sh keeps running instead of exiting at once.
+func TestAccContainerTTY(t *testing.T) {
+	addr := "espalier_container.test"
+	resource.Test(t, resource.TestCase{
+		ProtoV6ProviderFactories: testAccProviders,
+		CheckDestroy:             checkContainersGone("espalier-test-tty"),
+		Steps: []resource.TestStep{
+			{
+				Config: `
+resource "espalier_container" "test" {
+  name    = "espalier-test-tty"
+  image   = "busybox:1.37"
+  command = ["sh"]
+  tty     = true
+}`,
+				ConfigStateChecks: []statecheck.StateCheck{
+					statecheck.ExpectKnownValue(addr, tfjsonpath.New("tty"), knownvalue.Bool(true)),
+					statecheck.ExpectKnownValue(addr, tfjsonpath.New("state"), knownvalue.StringExact("running")),
+				},
+			},
+			{ResourceName: addr, ImportState: true, ImportStateVerify: true, ImportStateVerifyIgnore: []string{"image"}},
+		},
+	})
+}
+
 func TestAccContainerOptionsInvalid(t *testing.T) {
 	var steps []resource.TestStep
 	for extra, msg := range map[string]string{

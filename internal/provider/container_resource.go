@@ -62,6 +62,7 @@ type containerModel struct {
 	InitImage      types.String `tfsdk:"init_image"`
 	Runtime        types.String `tfsdk:"runtime"`
 	Virtualization types.Bool   `tfsdk:"virtualization"`
+	TTY            types.Bool   `tfsdk:"tty"`
 	ReadOnlyPaths  types.List   `tfsdk:"read_only_paths"`
 	MaskedPaths    types.List   `tfsdk:"masked_paths"`
 	Running        types.Bool   `tfsdk:"running"`

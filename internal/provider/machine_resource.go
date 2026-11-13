@@ -71,9 +71,8 @@ func (r *machineResource) Schema(_ context.Context, _ resource.SchemaRequest, re
 		MarkdownDescription: "A container machine (`container machine create`): a long-lived Linux VM made from an " +
 			"image, with an account for a host user and their home directory mounted. Changing the image, platform " +
 			"or account replaces it; the settings (`cpus`, `memory`, `home_mount`, `virtualization`, `kernel`) change " +
-			"in place and restart a running machine.\n\n" +
-			"A new machine boots once with the runtime's defaults (home directory mounted read-write) before configured " +
-			"settings are applied and it restarts.",
+			"in place and restart a running machine. A new machine is created with its settings and boots only " +
+			"if `running`.",
 		Attributes: map[string]schema.Attribute{
 			"id": schema.StringAttribute{MarkdownDescription: "The machine's name.", Computed: true, PlanModifiers: known},
 			"name": schema.StringAttribute{
@@ -202,6 +201,9 @@ func (r *machineResource) Create(ctx context.Context, req resource.CreateRequest
 		Home:       plan.Home.ValueString(),
 		Scheme:     plan.Scheme.ValueString(),
 		SetDefault: plan.Default.ValueBool(),
+		// Created with its settings, so it needs no restart to apply them.
+		Settings: changedSettings(plan, machineModel{}),
+		Boot:     plan.Running.ValueBool(),
 	}
 	if !plan.UID.IsUnknown() {
 		spec.UID = plan.UID.ValueInt64Pointer()
@@ -213,21 +215,9 @@ func (r *machineResource) Create(ctx context.Context, req resource.CreateRequest
 		resp.Diagnostics.AddError("Creating machine failed", err.Error())
 		return
 	}
-	// Record the machine from here on, so Terraform taints rather than
-	// loses it if a step fails.
-	missing := func() {
+	r.read(ctx, name, plan, &resp.State, &resp.Diagnostics, func() {
 		resp.Diagnostics.AddError("Creating machine failed", "machine "+name+" not found after creation")
-	}
-	settings := changedSettings(plan, machineModel{})
-	if settings != (client.MachineSettings{}) {
-		resp.Diagnostics.Append(r.apply(ctx, name, settings, true)...)
-	}
-	if !resp.Diagnostics.HasError() && !plan.Running.ValueBool() {
-		if err := r.client.StopMachine(ctx, name); err != nil {
-			resp.Diagnostics.AddError("Stopping machine failed", err.Error())
-		}
-	}
-	r.read(ctx, name, plan, &resp.State, &resp.Diagnostics, missing)
+	})
 }
 
 func (r *machineResource) Read(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse) {

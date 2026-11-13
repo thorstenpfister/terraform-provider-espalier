@@ -3,15 +3,12 @@
 page_title: "espalier_machine Resource - espalier"
 subcategory: ""
 description: |-
-  A container machine (container machine create): a long-lived Linux VM made from an image, with an account for a host user and their home directory mounted. Changing the image, platform or account replaces it; the settings (cpus, memory, home_mount, virtualization, kernel) change in place and restart a running machine.
-  A new machine boots once with the runtime's defaults (home directory mounted read-write) before configured settings are applied and it restarts.
+  A container machine (container machine create): a long-lived Linux VM made from an image, with an account for a host user and their home directory mounted. Changing the image, platform or account replaces it; the settings (cpus, memory, home_mount, virtualization, kernel) change in place and restart a running machine. A new machine is created with its settings and boots only if running.
 ---
 
 # espalier_machine (Resource)
 
-A container machine (`container machine create`): a long-lived Linux VM made from an image, with an account for a host user and their home directory mounted. Changing the image, platform or account replaces it; the settings (`cpus`, `memory`, `home_mount`, `virtualization`, `kernel`) change in place and restart a running machine.
-
-A new machine boots once with the runtime's defaults (home directory mounted read-write) before configured settings are applied and it restarts.
+A container machine (`container machine create`): a long-lived Linux VM made from an image, with an account for a host user and their home directory mounted. Changing the image, platform or account replaces it; the settings (`cpus`, `memory`, `home_mount`, `virtualization`, `kernel`) change in place and restart a running machine. A new machine is created with its settings and boots only if `running`.
 
 ## Example Usage
 

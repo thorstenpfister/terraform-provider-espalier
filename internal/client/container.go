@@ -34,6 +34,7 @@ type ContainerSpec struct {
 	Init           bool // run an init process that reaps zombies and forwards signals
 	Rosetta        bool
 	SSH            bool   // forward the host's SSH agent
+	TTY            bool   // give the process a terminal, which keeps e.g. a shell running
 	ShmSize        string // e.g. "64M"; empty for the runtime's default
 	Ulimits        []Ulimit
 	PublishSockets []Socket
@@ -136,6 +137,7 @@ type containerJSON struct {
 			Arguments        []string `json:"arguments"`
 			Environment      []string `json:"environment"`
 			WorkingDirectory string   `json:"workingDirectory"`
+			Terminal         bool     `json:"terminal"`
 			User             struct {
 				Raw *struct {
 					UserString string `json:"userString"`
@@ -312,7 +314,7 @@ func (spec ContainerSpec) optionArgs() []string {
 		on   bool
 	}{
 		{"--read-only", spec.ReadOnly}, {"--init", spec.Init}, {"--rosetta", spec.Rosetta}, {"--ssh", spec.SSH},
-		{"--no-dns", spec.NoDNS}, {"--virtualization", spec.Virtualization},
+		{"--no-dns", spec.NoDNS}, {"--virtualization", spec.Virtualization}, {"--tty", spec.TTY},
 	} {
 		if f.on {
 			args = append(args, f.name)
@@ -402,6 +404,7 @@ func (j containerJSON) container(images []imageJSON) Container {
 	}
 	ctr.Platform = cfg.Platform.String()
 	ctr.ReadOnly, ctr.Init, ctr.Rosetta, ctr.SSH = cfg.ReadOnly, cfg.UseInit, cfg.Rosetta, cfg.SSH
+	ctr.TTY = cfg.InitProcess.Terminal
 	ctr.Runtime, ctr.Virtualization = cfg.RuntimeHandler, cfg.Virtualization
 	ctr.ReadOnlyPaths, ctr.MaskedPaths = cfg.ReadonlyPaths, cfg.MaskedPaths
 	switch u := cfg.InitProcess.User; {

@@ -168,3 +168,25 @@ resource "espalier_machine" "test" {
 	}
 	resource.Test(t, resource.TestCase{ProtoV6ProviderFactories: testAccProviders, Steps: steps})
 }
+
+// Created stopped, with its settings: it never boots.
+func TestAccMachineCreatedStopped(t *testing.T) {
+	addr := "espalier_machine.test"
+	resource.Test(t, resource.TestCase{
+		ProtoV6ProviderFactories: testAccProviders,
+		CheckDestroy: func(*terraform.State) error {
+			if m, err := testClient.Machine(context.Background(), testMachine); err != nil || m != nil {
+				return fmt.Errorf("machine %s still exists (%v)", testMachine, err)
+			}
+			return testClient.DeleteImage(context.Background(), "docker.io/library/alpine:3.22")
+		},
+		Steps: []resource.TestStep{{
+			Config: machineConfig("alpine:3.22", 1, "1G", "", false),
+			ConfigStateChecks: []statecheck.StateCheck{
+				statecheck.ExpectKnownValue(addr, tfjsonpath.New("status"), knownvalue.StringExact("stopped")),
+				statecheck.ExpectKnownValue(addr, tfjsonpath.New("cpus"), knownvalue.Int64Exact(1)),
+				statecheck.ExpectKnownValue(addr, tfjsonpath.New("home_mount"), knownvalue.StringExact("none")),
+			},
+		}},
+	})
+}
