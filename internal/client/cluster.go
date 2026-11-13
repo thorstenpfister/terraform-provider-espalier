@@ -6,6 +6,8 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+
+	"gopkg.in/yaml.v3"
 )
 
 // ClusterSpec is what a local Kubernetes cluster is created with.
@@ -186,9 +188,35 @@ func (c CLI) ClusterKubeconfig(ctx context.Context, name string) ([]byte, error)
 		}
 		var err error
 		config, err = os.ReadFile(path)
+		if err != nil {
+			return err
+		}
+		config, err = withCurrentContext(config)
 		return err
 	})
 	return config, err
+}
+
+// withCurrentContext selects the kubeconfig's only context if none is:
+// write-config leaves current-context unset in a new file (container
+// 1.7.1), so kubectl would fall back to localhost:8080.
+func withCurrentContext(config []byte) ([]byte, error) {
+	var kc struct {
+		CurrentContext string `yaml:"current-context"`
+		Contexts       []struct {
+			Name string `yaml:"name"`
+		} `yaml:"contexts"`
+	}
+	if err := yaml.Unmarshal(config, &kc); err != nil {
+		return nil, fmt.Errorf("reading kubeconfig: %w", err)
+	}
+	if kc.CurrentContext != "" || len(kc.Contexts) != 1 {
+		return config, nil
+	}
+	if len(config) > 0 && config[len(config)-1] != '\n' {
+		config = append(config, '\n')
+	}
+	return append(config, "current-context: "+strconv.Quote(kc.Contexts[0].Name)+"\n"...), nil
 }
 
 func (c CLI) DeleteCluster(ctx context.Context, name string) error {

@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/tls"
 	"crypto/x509"
+	"encoding/base64"
 	"fmt"
 	"net/http"
 	"os"
@@ -20,6 +21,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-testing/statecheck"
 	"github.com/hashicorp/terraform-plugin-testing/terraform"
 	"github.com/hashicorp/terraform-plugin-testing/tfjsonpath"
+	"gopkg.in/yaml.v3"
 
 	"github.com/thorstenpfister/terraform-provider-espalier/internal/client"
 )
@@ -200,16 +202,72 @@ func killNode(t *testing.T, node string) {
 func checkAPIServerReady(addr string) resource.TestCheckFunc {
 	return func(s *terraform.State) error {
 		attrs := s.RootModule().Resources[addr].Primary.Attributes
-		cert, err := tls.X509KeyPair([]byte(attrs["client_certificate"]), []byte(attrs["client_key"]))
+		// Connect as kubectl would with the kubeconfig: through its current
+		// context. It must agree with the separate attributes.
+		var kc struct {
+			CurrentContext string `yaml:"current-context"`
+			Contexts       []struct {
+				Name    string `yaml:"name"`
+				Context struct{ Cluster, User string }
+			}
+			Clusters []struct {
+				Name    string `yaml:"name"`
+				Cluster struct {
+					Server string `yaml:"server"`
+					CA     string `yaml:"certificate-authority-data"`
+				}
+			}
+			Users []struct {
+				Name string `yaml:"name"`
+				User struct {
+					Cert string `yaml:"client-certificate-data"`
+					Key  string `yaml:"client-key-data"`
+				}
+			}
+		}
+		if err := yaml.Unmarshal([]byte(attrs["kubeconfig"]), &kc); err != nil {
+			return err
+		}
+		var server, caData, certData, keyData string
+		for _, c := range kc.Contexts {
+			if c.Name != kc.CurrentContext {
+				continue
+			}
+			for _, cl := range kc.Clusters {
+				if cl.Name == c.Context.Cluster {
+					server, caData = cl.Cluster.Server, cl.Cluster.CA
+				}
+			}
+			for _, u := range kc.Users {
+				if u.Name == c.Context.User {
+					certData, keyData = u.User.Cert, u.User.Key
+				}
+			}
+		}
+		decoded := map[string]string{}
+		for name, data := range map[string]string{"cluster_ca_certificate": caData, "client_certificate": certData, "client_key": keyData} {
+			b, err := base64.StdEncoding.DecodeString(data)
+			if err != nil || len(b) == 0 {
+				return fmt.Errorf("kubeconfig: no %s through current-context %q (%v)", name, kc.CurrentContext, err)
+			}
+			if string(b) != attrs[name] {
+				return fmt.Errorf("kubeconfig and %s differ", name)
+			}
+			decoded[name] = string(b)
+		}
+		if server != attrs["api_server"] {
+			return fmt.Errorf("kubeconfig server %q, api_server %q", server, attrs["api_server"])
+		}
+		cert, err := tls.X509KeyPair([]byte(decoded["client_certificate"]), []byte(decoded["client_key"]))
 		if err != nil {
 			return err
 		}
 		ca := x509.NewCertPool()
-		if !ca.AppendCertsFromPEM([]byte(attrs["cluster_ca_certificate"])) {
+		if !ca.AppendCertsFromPEM([]byte(decoded["cluster_ca_certificate"])) {
 			return fmt.Errorf("no CA certificate")
 		}
 		c := &http.Client{Transport: &http.Transport{TLSClientConfig: &tls.Config{Certificates: []tls.Certificate{cert}, RootCAs: ca}}}
-		resp, err := c.Get(attrs["api_server"] + "/readyz")
+		resp, err := c.Get(server + "/readyz")
 		if err != nil {
 			return err
 		}

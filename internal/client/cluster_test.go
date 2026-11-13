@@ -81,11 +81,18 @@ func TestCreateAndDeleteClusterKeepKubeconfig(t *testing.T) {
 }
 
 func TestClusterKubeconfig(t *testing.T) {
-	run := func(_ context.Context, args ...string) ([]byte, error) {
-		return nil, os.WriteFile(args[len(args)-1], []byte("apiVersion: v1\n"), 0o600)
-	}
-	got, err := CLI{Run: run}.ClusterKubeconfig(context.Background(), "lab")
-	if err != nil || string(got) != "apiVersion: v1\n" {
-		t.Errorf("got %q, %v", got, err)
+	for _, tc := range []struct{ written, want string }{
+		// As write-config writes a new file: the only context is selected.
+		{"contexts:\n- name: lab\n", "contexts:\n- name: lab\ncurrent-context: \"lab\"\n"},
+		{"contexts:\n- name: lab\ncurrent-context: other\n", "contexts:\n- name: lab\ncurrent-context: other\n"},
+		{"apiVersion: v1\n", "apiVersion: v1\n"},
+	} {
+		run := func(_ context.Context, args ...string) ([]byte, error) {
+			return nil, os.WriteFile(args[len(args)-1], []byte(tc.written), 0o600)
+		}
+		got, err := CLI{Run: run}.ClusterKubeconfig(context.Background(), "lab")
+		if err != nil || string(got) != tc.want {
+			t.Errorf("%q: got %q, %v; want %q", tc.written, got, err, tc.want)
+		}
 	}
 }
