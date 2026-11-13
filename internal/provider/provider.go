@@ -67,11 +67,13 @@ func (p *espalierProvider) Resources(context.Context) []func() resource.Resource
 	return []func() resource.Resource{
 		NewNetworkResource,
 		NewVolumeResource,
+		NewImageResource,
 	}
 }
 
 func (p *espalierProvider) DataSources(context.Context) []func() datasource.DataSource {
 	return []func() datasource.DataSource{
 		NewSystemDataSource,
+		NewImageDataSource,
 	}
 }

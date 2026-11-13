@@ -21,6 +21,12 @@ type Client interface {
 	// Volume returns nil, without an error, if the volume does not exist.
 	Volume(ctx context.Context, name string) (*Volume, error)
 	DeleteVolume(ctx context.Context, name string) error
+
+	PullImage(ctx context.Context, spec ImageSpec) error
+	// Image resolves a reference to a local image; nil, without an error, if
+	// it has not been pulled.
+	Image(ctx context.Context, reference string) (*Image, error)
+	DeleteImage(ctx context.Context, name string) error
 }
 
 // System describes the runtime on this host.
