@@ -20,6 +20,7 @@ import (
 const tagTarget = "espalier-test/tagged:1"
 
 func TestAccImageTag(t *testing.T) {
+	requireImagesAbsent(t, "busybox:1.35", tagTarget)
 	addr := "espalier_image_tag.test"
 	config := fmt.Sprintf(`
 resource "espalier_image_tag" "test" {

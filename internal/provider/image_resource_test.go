@@ -43,6 +43,7 @@ func TestAccImage(t *testing.T) {
 		PreApply: []plancheck.PlanCheck{plancheck.ExpectResourceAction(addr, plancheck.ResourceActionUpdate)},
 	}
 
+	requireImagesAbsent(t, testImage)
 	resource.Test(t, resource.TestCase{
 		ProtoV6ProviderFactories: testAccProviders,
 		CheckDestroy:             checkImagesGone(testImage),
@@ -86,6 +87,7 @@ func TestAccImage(t *testing.T) {
 }
 
 func TestAccImageKeepLocally(t *testing.T) {
+	requireImagesAbsent(t, keptImage)
 	resource.Test(t, resource.TestCase{
 		ProtoV6ProviderFactories: testAccProviders,
 		CheckDestroy: func(*terraform.State) error {

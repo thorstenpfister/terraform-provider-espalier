@@ -92,7 +92,31 @@ make docs          # regenerate docs/ from schema, examples/ and templates/
 ```
 
 Acceptance tests run against your local runtime. CI runners usually lack
-the nested virtualization the runtime needs, so they run locally.
+the nested virtualization the runtime needs, so they run locally. A full run
+takes about five minutes per tool, needs network access to pull small images
+from Docker Hub (and the runtime's `kindest/node` image once), and room for a
+two-node cluster of 2 CPUs and 2 GB each. The tests leave the host as they
+found it: they refuse to run rather than delete an image of yours they would
+remove, delete only images they pulled, restart a builder they stopped with
+its size, and skip what would change your default machine.
+
+### Upgrading the runtime
+
+The provider is verified against **`container` 1.7.1**, and
+`TestAccTestedVersion` fails on any other version, so an upgrade gets a
+deliberate check:
+
+1. Run `make testacc` and `make testacc-tofu`. Output formats and behaviour
+   are checked against the real CLI there; the client's unit-test fixtures are
+   snapshots of the tested version.
+2. Review what was written for that version: `grep -rn 1.7.1 internal/` lists
+   the output formats the client decodes and the workarounds (e.g. `build
+   --quiet` hanging without a terminal).
+3. Check whether upstream fixed what this provider works around or leaves out:
+   registry logins ([#1733](https://github.com/apple/container/issues/1733)),
+   `--shared-image-store` in Homebrew builds, `--quiet` builds.
+4. Update `testedCLIVersion` in `internal/provider/host_test.go` and the
+   version above.
 
 ## License
 

@@ -47,6 +47,7 @@ func TestAccMachine(t *testing.T) {
 		return []statecheck.StateCheck{statecheck.ExpectKnownValue(addr, tfjsonpath.New("status"), knownvalue.StringExact(s))}
 	}
 
+	pulled := newImages(t, "alpine:3.22")
 	resource.Test(t, resource.TestCase{
 		ProtoV6ProviderFactories: testAccProviders,
 		CheckDestroy: func(*terraform.State) error {
@@ -57,7 +58,7 @@ func TestAccMachine(t *testing.T) {
 			if m != nil {
 				return fmt.Errorf("machine %s still exists", testMachine)
 			}
-			return testClient.DeleteImage(context.Background(), "docker.io/library/alpine:3.22")
+			return deleteImages(pulled)
 		},
 		Steps: []resource.TestStep{
 			{
@@ -172,13 +173,14 @@ resource "espalier_machine" "test" {
 // Created stopped, with its settings: it never boots.
 func TestAccMachineCreatedStopped(t *testing.T) {
 	addr := "espalier_machine.test"
+	pulled := newImages(t, "alpine:3.22")
 	resource.Test(t, resource.TestCase{
 		ProtoV6ProviderFactories: testAccProviders,
 		CheckDestroy: func(*terraform.State) error {
 			if m, err := testClient.Machine(context.Background(), testMachine); err != nil || m != nil {
 				return fmt.Errorf("machine %s still exists (%v)", testMachine, err)
 			}
-			return testClient.DeleteImage(context.Background(), "docker.io/library/alpine:3.22")
+			return deleteImages(pulled)
 		},
 		Steps: []resource.TestStep{{
 			Config: machineConfig("alpine:3.22", 1, "1G", "", false),
@@ -188,5 +190,78 @@ func TestAccMachineCreatedStopped(t *testing.T) {
 				statecheck.ExpectKnownValue(addr, tfjsonpath.New("home_mount"), knownvalue.StringExact("none")),
 			},
 		}},
+	})
+}
+
+func defaultMachinesConfig(cpus int, makeDefault bool) string {
+	def := ""
+	if makeDefault {
+		def = "default = true"
+	}
+	return fmt.Sprintf(`
+resource "espalier_machine" "first" {
+  name       = "%[1]s-1"
+  image      = "alpine:3.22"
+  home_mount = "none"
+  running    = false
+}
+
+resource "espalier_machine" "second" {
+  name       = "%[1]s-2"
+  image      = "alpine:3.22"
+  home_mount = "none"
+  cpus       = %[2]d
+  memory     = "1G"
+  running    = false
+  %[3]s
+
+  depends_on = [espalier_machine.first]
+}
+
+data "espalier_machines" "all" {
+  depends_on = [espalier_machine.first, espalier_machine.second]
+}`, testMachine, cpus, def)
+}
+
+// Becoming the default machine, and a settings change of a stopped machine:
+// both in place, and the machine stays stopped.
+func TestAccMachineDefaultAndStoppedSettings(t *testing.T) {
+	requireNoMachines(t)
+	second := "espalier_machine.second"
+	pulled := newImages(t, "alpine:3.22")
+	isDefault := func(i int, want bool) statecheck.StateCheck {
+		return statecheck.ExpectKnownValue("data.espalier_machines.all", tfjsonpath.New("machines").AtSliceIndex(i).AtMapKey("default"), knownvalue.Bool(want))
+	}
+	resource.Test(t, resource.TestCase{
+		ProtoV6ProviderFactories: testAccProviders,
+		CheckDestroy: func(*terraform.State) error {
+			if ms, err := testClient.Machines(context.Background()); err != nil || len(ms) != 0 {
+				return fmt.Errorf("machines left: %d (%v)", len(ms), err)
+			}
+			return deleteImages(pulled)
+		},
+		Steps: []resource.TestStep{
+			// The first machine on a host becomes its default.
+			{
+				Config:            defaultMachinesConfig(1, false),
+				ConfigStateChecks: []statecheck.StateCheck{isDefault(0, true), isDefault(1, false)},
+			},
+			{
+				Config: defaultMachinesConfig(2, true),
+				ConfigPlanChecks: resource.ConfigPlanChecks{PreApply: []plancheck.PlanCheck{
+					plancheck.ExpectResourceAction(second, plancheck.ResourceActionUpdate),
+				}},
+				ConfigStateChecks: []statecheck.StateCheck{
+					statecheck.ExpectKnownValue(second, tfjsonpath.New("default"), knownvalue.Bool(true)),
+					statecheck.ExpectKnownValue(second, tfjsonpath.New("cpus"), knownvalue.Int64Exact(2)),
+					statecheck.ExpectKnownValue(second, tfjsonpath.New("status"), knownvalue.StringExact("stopped")),
+				},
+			},
+			// The data source read before the change was applied; read again.
+			{
+				Config:            defaultMachinesConfig(2, true),
+				ConfigStateChecks: []statecheck.StateCheck{isDefault(0, false), isDefault(1, true)},
+			},
+		},
 	})
 }

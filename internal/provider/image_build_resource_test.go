@@ -53,10 +53,10 @@ data "espalier_image" "built" {
 	}
 	rebuilds := resource.ConfigPlanChecks{PreApply: []plancheck.PlanCheck{plancheck.ExpectResourceAction(addr, plancheck.ResourceActionUpdate)}}
 	digests := statecheck.CompareValue(compare.ValuesDiffer())
+	stopBuilderUntilCleanup(t)
 
 	resource.Test(t, resource.TestCase{
 		ProtoV6ProviderFactories: testAccProviders,
-		PreCheck:                 func() { stopBuilder(t) },
 		CheckDestroy: func(s *terraform.State) error {
 			stopBuilder(t)
 			return checkImagesGone(builtTag, builtTagOther)(s)
@@ -115,6 +115,27 @@ data "espalier_image" "built" {
 					},
 				},
 			},
+			// Without hashing, the context no longer counts: turning it off
+			// does not rebuild, and a changed file then changes nothing.
+			{
+				Config: config("", `triggers = { rebuild = "1" }
+  hash_context = false`, builtTag),
+				ConfigPlanChecks: resource.ConfigPlanChecks{
+					PreApply: []plancheck.PlanCheck{
+						plancheck.ExpectResourceAction(addr, plancheck.ResourceActionUpdate),
+						plancheck.ExpectKnownValue(addr, tfjsonpath.New("digest"), knownvalue.NotNull()),
+						plancheck.ExpectKnownValue(addr, tfjsonpath.New("context_hash"), knownvalue.Null()),
+					},
+				},
+			},
+			{
+				PreConfig: func() { writeFile(t, dir, "file.txt", "changed again") },
+				Config: config("", `triggers = { rebuild = "1" }
+  hash_context = false`, builtTag),
+				ConfigPlanChecks: resource.ConfigPlanChecks{
+					PreApply: []plancheck.PlanCheck{plancheck.ExpectEmptyPlan()},
+				},
+			},
 			// A dropped tag is removed; the builder is kept running if asked.
 			{
 				Config:           config("builder = { keep_running = true }", "", builtTagOther),
@@ -130,9 +151,9 @@ data "espalier_image" "built" {
 
 func TestAccImageBuildFails(t *testing.T) {
 	dir := buildContext(t, "FROM docker.io/library/busybox:1.37\nRUN exit 3\n")
+	stopBuilderUntilCleanup(t)
 	resource.Test(t, resource.TestCase{
 		ProtoV6ProviderFactories: testAccProviders,
-		PreCheck:                 func() { stopBuilder(t) },
 		// The failed build stopped the builder again.
 		CheckDestroy: resource.ComposeTestCheckFunc(checkImagesGone(builtTag), checkBuilderRunning(false)),
 		Steps: []resource.TestStep{
