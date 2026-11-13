@@ -70,6 +70,7 @@ func (p *espalierProvider) Resources(context.Context) []func() resource.Resource
 		NewImageResource,
 		NewImageTagResource,
 		NewContainerResource,
+		NewMachineResource,
 	}
 }
 

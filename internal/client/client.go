@@ -42,6 +42,16 @@ type Client interface {
 	// DeleteContainer deletes the container, stopping it first if it runs.
 	DeleteContainer(ctx context.Context, name string) error
 	Containers(ctx context.Context) ([]Container, error)
+
+	CreateMachine(ctx context.Context, spec MachineSpec) error
+	// SetMachine changes settings, effective when the machine next starts.
+	SetMachine(ctx context.Context, name string, settings MachineSettings) error
+	StartMachine(ctx context.Context, name string) error
+	StopMachine(ctx context.Context, name string) error
+	SetDefaultMachine(ctx context.Context, name string) error
+	// Machine returns nil, without an error, if the machine does not exist.
+	Machine(ctx context.Context, name string) (*Machine, error)
+	DeleteMachine(ctx context.Context, name string) error
 }
 
 // System describes the runtime on this host.
