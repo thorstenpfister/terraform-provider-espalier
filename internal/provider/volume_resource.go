@@ -4,6 +4,7 @@ import (
 	"context"
 	"regexp"
 
+	"github.com/hashicorp/terraform-plugin-framework-validators/mapvalidator"
 	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
 	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/path"
@@ -29,6 +30,7 @@ type volumeModel struct {
 	Name      types.String `tfsdk:"name"`
 	Size      types.String `tfsdk:"size"`
 	Labels    types.Map    `tfsdk:"labels"`
+	Options   types.Map    `tfsdk:"options"`
 	SizeBytes types.Int64  `tfsdk:"size_bytes"`
 	Format    types.String `tfsdk:"format"`
 	Source    types.String `tfsdk:"source"`
@@ -78,6 +80,13 @@ func (r *volumeResource) Schema(_ context.Context, _ resource.SchemaRequest, res
 				Optional:            true,
 				PlanModifiers:       []planmodifier.Map{mapplanmodifier.RequiresReplace()},
 			},
+			"options": schema.MapAttribute{
+				MarkdownDescription: "Driver-specific options (`--opt key=value`). Use `size` for the size, not an option.",
+				ElementType:         types.StringType,
+				Optional:            true,
+				PlanModifiers:       []planmodifier.Map{mapplanmodifier.RequiresReplace()},
+				Validators:          []validator.Map{mapvalidator.KeysAre(stringvalidator.NoneOf("size"))},
+			},
 			"size_bytes": schema.Int64Attribute{
 				MarkdownDescription: "Size of the volume in bytes.",
 				Computed:            true,
@@ -109,6 +118,7 @@ func (r *volumeResource) Create(ctx context.Context, req resource.CreateRequest,
 	}
 	spec := client.VolumeSpec{Name: plan.Name.ValueString(), Size: plan.Size.ValueString()}
 	resp.Diagnostics.Append(plan.Labels.ElementsAs(ctx, &spec.Labels, false)...)
+	resp.Diagnostics.Append(plan.Options.ElementsAs(ctx, &spec.Options, false)...)
 	if resp.Diagnostics.HasError() {
 		return
 	}
@@ -116,7 +126,7 @@ func (r *volumeResource) Create(ctx context.Context, req resource.CreateRequest,
 		resp.Diagnostics.AddError("Creating volume failed", err.Error())
 		return
 	}
-	r.read(ctx, spec.Name, plan.Labels, &resp.State, &resp.Diagnostics, func() {
+	r.read(ctx, spec.Name, plan, &resp.State, &resp.Diagnostics, func() {
 		resp.Diagnostics.AddError("Creating volume failed", "volume "+spec.Name+" not found after creation")
 	})
 }
@@ -128,7 +138,7 @@ func (r *volumeResource) Read(ctx context.Context, req resource.ReadRequest, res
 		return
 	}
 	// Deleted outside Terraform: drop it from state so it is planned again.
-	r.read(ctx, state.ID.ValueString(), state.Labels, &resp.State, &resp.Diagnostics, func() { resp.State.RemoveResource(ctx) })
+	r.read(ctx, state.ID.ValueString(), state, &resp.State, &resp.Diagnostics, func() { resp.State.RemoveResource(ctx) })
 }
 
 // Update is never called: every argument requires replacement.
@@ -158,8 +168,8 @@ func (r *volumeResource) ImportState(ctx context.Context, req resource.ImportSta
 }
 
 // read stores the named volume in st, or calls missing if it does not exist.
-// prior holds the labels from plan or state (see labelsValue).
-func (r *volumeResource) read(ctx context.Context, name string, prior types.Map, st *tfsdk.State, diags *diag.Diagnostics, missing func()) {
+// prior is the plan or state, for maps left unset (see labelsValue).
+func (r *volumeResource) read(ctx context.Context, name string, prior volumeModel, st *tfsdk.State, diags *diag.Diagnostics, missing func()) {
 	v, err := r.client.Volume(ctx, name)
 	if err != nil {
 		diags.AddError("Reading volume failed", err.Error())
@@ -173,7 +183,8 @@ func (r *volumeResource) read(ctx context.Context, name string, prior types.Map,
 		ID:        types.StringValue(v.Name),
 		Name:      types.StringValue(v.Name),
 		Size:      types.StringNull(),
-		Labels:    labelsValue(ctx, v.Labels, prior, diags),
+		Labels:    labelsValue(ctx, v.Labels, prior.Labels, diags),
+		Options:   labelsValue(ctx, v.Options, prior.Options, diags),
 		SizeBytes: types.Int64Value(v.SizeBytes),
 		Format:    types.StringValue(v.Format),
 		Source:    types.StringValue(v.Source),

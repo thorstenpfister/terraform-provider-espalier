@@ -25,6 +25,39 @@ type ContainerSpec struct {
 	Ports    []Port
 	CapAdd   []string
 	CapDrop  []string
+
+	Platform       string // e.g. "linux/arm64"; empty for the image's
+	User           string // name|uid[:gid]; empty for the image's
+	ReadOnly       bool   // read-only root filesystem
+	DNS            DNS
+	NoDNS          bool // no resolver configuration at all; DNS must be empty
+	Init           bool // run an init process that reaps zombies and forwards signals
+	Rosetta        bool
+	SSH            bool   // forward the host's SSH agent
+	ShmSize        string // e.g. "64M"; empty for the runtime's default
+	Ulimits        []Ulimit
+	PublishSockets []Socket
+	Scheme         string // registry scheme for pulling the image, "http" or "https"; not recorded
+}
+
+// DNS is a container's resolver configuration. Zero values are the
+// runtime's defaults.
+type DNS struct {
+	Nameservers []string
+	Domain      string
+	Search      []string
+	Options     []string
+}
+
+// Ulimit is a resource limit of the container's process.
+type Ulimit struct {
+	Name       string // as the CLI takes it, e.g. "nofile"
+	Soft, Hard int64
+}
+
+// Socket publishes a socket in the container on the host.
+type Socket struct {
+	HostPath, ContainerPath string
 }
 
 // NetworkAttachment attaches a container to a network.
@@ -63,9 +96,10 @@ type Port struct {
 // the spec left them to defaults; Env excludes the image's own environment.
 type Container struct {
 	ContainerSpec
-	MemoryBytes int64
-	State       string // "running", "stopped", …
-	Addresses   []Address
+	MemoryBytes  int64
+	ShmSizeBytes int64  // 0 for the runtime's default
+	State        string // "running", "stopped", …
+	Addresses    []Address
 }
 
 // Address is a running container's address on one network.
@@ -90,6 +124,20 @@ type containerJSON struct {
 			Arguments        []string `json:"arguments"`
 			Environment      []string `json:"environment"`
 			WorkingDirectory string   `json:"workingDirectory"`
+			User             struct {
+				Raw *struct {
+					UserString string `json:"userString"`
+				} `json:"raw"`
+				ID *struct {
+					UID int64 `json:"uid"`
+					GID int64 `json:"gid"`
+				} `json:"id"`
+			} `json:"user"`
+			Rlimits []struct {
+				Limit string `json:"limit"`
+				Soft  int64  `json:"soft"`
+				Hard  int64  `json:"hard"`
+			} `json:"rlimits"`
 		} `json:"initProcess"`
 		Resources struct {
 			CPUs          int64 `json:"cpus"`
@@ -125,6 +173,21 @@ type containerJSON struct {
 		} `json:"publishedPorts"`
 		CapAdd  []string `json:"capAdd"`
 		CapDrop []string `json:"capDrop"`
+		DNS     *struct {
+			Nameservers   []string `json:"nameservers"`
+			Domain        string   `json:"domain"`
+			SearchDomains []string `json:"searchDomains"`
+			Options       []string `json:"options"`
+		} `json:"dns"`
+		ReadOnly         bool  `json:"readOnly"`
+		UseInit          bool  `json:"useInit"`
+		Rosetta          bool  `json:"rosetta"`
+		SSH              bool  `json:"ssh"`
+		ShmSize          int64 `json:"shmSize"`
+		PublishedSockets []struct {
+			ContainerPath string `json:"containerPath"`
+			HostPath      string `json:"hostPath"`
+		} `json:"publishedSockets"`
 	} `json:"configuration"`
 	Status struct {
 		State    string `json:"state"`
@@ -191,6 +254,7 @@ func (c CLI) CreateContainer(ctx context.Context, spec ContainerSpec) error {
 	for _, cap := range spec.CapDrop {
 		args = append(args, "--cap-drop", cap)
 	}
+	args = append(args, spec.optionArgs()...)
 	if len(spec.Command) > 0 {
 		args = append(args, "--entrypoint", spec.Command[0])
 	}
@@ -210,6 +274,45 @@ func (c CLI) StartContainer(ctx context.Context, name string) error {
 func (c CLI) StopContainer(ctx context.Context, name string) error {
 	_, err := c.Run(ctx, "stop", name)
 	return err
+}
+
+// optionArgs are the flags for the less common options.
+func (spec ContainerSpec) optionArgs() []string {
+	var args []string
+	flag := func(name, value string) {
+		if value != "" {
+			args = append(args, name, value)
+		}
+	}
+	flag("--platform", spec.Platform)
+	flag("--user", spec.User)
+	flag("--shm-size", spec.ShmSize)
+	flag("--scheme", spec.Scheme)
+	for _, f := range []struct {
+		name string
+		on   bool
+	}{{"--read-only", spec.ReadOnly}, {"--init", spec.Init}, {"--rosetta", spec.Rosetta}, {"--ssh", spec.SSH}, {"--no-dns", spec.NoDNS}} {
+		if f.on {
+			args = append(args, f.name)
+		}
+	}
+	for _, ns := range spec.DNS.Nameservers {
+		args = append(args, "--dns", ns)
+	}
+	flag("--dns-domain", spec.DNS.Domain)
+	for _, s := range spec.DNS.Search {
+		args = append(args, "--dns-search", s)
+	}
+	for _, o := range spec.DNS.Options {
+		args = append(args, "--dns-option", o)
+	}
+	for _, u := range spec.Ulimits {
+		args = append(args, "--ulimit", fmt.Sprintf("%s=%d:%d", u.Name, u.Soft, u.Hard))
+	}
+	for _, s := range spec.PublishSockets {
+		args = append(args, "--publish-socket", s.HostPath+":"+s.ContainerPath)
+	}
+	return args
 }
 
 // Container returns the named container, or nil if it does not exist.
@@ -240,8 +343,28 @@ func (c CLI) Container(ctx context.Context, name string) (*Container, error) {
 			CapAdd:  cfg.CapAdd,
 			CapDrop: cfg.CapDrop,
 		},
-		MemoryBytes: cfg.Resources.MemoryInBytes,
-		State:       j.Status.State,
+		MemoryBytes:  cfg.Resources.MemoryInBytes,
+		ShmSizeBytes: cfg.ShmSize,
+		State:        j.Status.State,
+	}
+	ctr.Platform = cfg.Platform.String()
+	ctr.ReadOnly, ctr.Init, ctr.Rosetta, ctr.SSH = cfg.ReadOnly, cfg.UseInit, cfg.Rosetta, cfg.SSH
+	switch u := cfg.InitProcess.User; {
+	case u.Raw != nil:
+		ctr.User = u.Raw.UserString
+	case u.ID != nil:
+		ctr.User = fmt.Sprintf("%d:%d", u.ID.UID, u.ID.GID)
+	}
+	if d := cfg.DNS; d != nil {
+		ctr.DNS = DNS{Nameservers: d.Nameservers, Domain: d.Domain, Search: d.SearchDomains, Options: d.Options}
+	} else {
+		ctr.NoDNS = true
+	}
+	for _, l := range cfg.InitProcess.Rlimits {
+		ctr.Ulimits = append(ctr.Ulimits, Ulimit{Name: strings.ToLower(strings.TrimPrefix(l.Limit, "RLIMIT_")), Soft: l.Soft, Hard: l.Hard})
+	}
+	for _, s := range cfg.PublishedSockets {
+		ctr.PublishSockets = append(ctr.PublishSockets, Socket{HostPath: s.HostPath, ContainerPath: s.ContainerPath})
 	}
 	// The runtime merges the image's environment in; keep only what the
 	// container adds or overrides.

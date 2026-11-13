@@ -41,6 +41,8 @@ resource "espalier_network" "internal" {
 
 - `internal` (Boolean) Host-only network without a route off the host (`--internal`). Defaults to `false` (NAT).
 - `labels` (Map of String) Labels attached to the network.
+- `options` (Map of String) Plugin-specific options (`--option key=value`).
+- `plugin` (String) Network plugin (`--plugin`). Defaults to the runtime's, `container-network-vmnet`.
 - `subnet` (String) IPv4 subnet in CIDR notation. Chosen by the runtime if not set.
 - `subnet_v6` (String) IPv6 prefix in CIDR notation. Chosen by the runtime if not set.
 

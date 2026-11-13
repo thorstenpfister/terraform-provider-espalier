@@ -29,6 +29,8 @@ type networkModel struct {
 	Subnet   types.String `tfsdk:"subnet"`
 	SubnetV6 types.String `tfsdk:"subnet_v6"`
 	Labels   types.Map    `tfsdk:"labels"`
+	Plugin   types.String `tfsdk:"plugin"`
+	Options  types.Map    `tfsdk:"options"`
 	Gateway  types.String `tfsdk:"gateway"`
 }
 
@@ -88,6 +90,18 @@ func (r *networkResource) Schema(_ context.Context, _ resource.SchemaRequest, re
 				Optional:            true,
 				PlanModifiers:       []planmodifier.Map{mapplanmodifier.RequiresReplace()},
 			},
+			"plugin": schema.StringAttribute{
+				MarkdownDescription: "Network plugin (`--plugin`). Defaults to the runtime's, `container-network-vmnet`.",
+				Optional:            true,
+				Computed:            true,
+				PlanModifiers:       chosen,
+			},
+			"options": schema.MapAttribute{
+				MarkdownDescription: "Plugin-specific options (`--option key=value`).",
+				ElementType:         types.StringType,
+				Optional:            true,
+				PlanModifiers:       []planmodifier.Map{mapplanmodifier.RequiresReplace()},
+			},
 			"gateway": schema.StringAttribute{
 				MarkdownDescription: "IPv4 gateway address of the network.",
 				Computed:            true,
@@ -114,6 +128,8 @@ func (r *networkResource) Create(ctx context.Context, req resource.CreateRequest
 		SubnetV6: plan.SubnetV6.ValueString(),
 	}
 	resp.Diagnostics.Append(plan.Labels.ElementsAs(ctx, &spec.Labels, false)...)
+	resp.Diagnostics.Append(plan.Options.ElementsAs(ctx, &spec.Options, false)...)
+	spec.Plugin = plan.Plugin.ValueString() // "" when unknown: the default
 	if resp.Diagnostics.HasError() {
 		return
 	}
@@ -121,7 +137,7 @@ func (r *networkResource) Create(ctx context.Context, req resource.CreateRequest
 		resp.Diagnostics.AddError("Creating network failed", err.Error())
 		return
 	}
-	r.read(ctx, spec.Name, plan.Labels, &resp.State, &resp.Diagnostics, func() {
+	r.read(ctx, spec.Name, plan, &resp.State, &resp.Diagnostics, func() {
 		resp.Diagnostics.AddError("Creating network failed", "network "+spec.Name+" not found after creation")
 	})
 }
@@ -133,7 +149,7 @@ func (r *networkResource) Read(ctx context.Context, req resource.ReadRequest, re
 		return
 	}
 	// Deleted outside Terraform: drop it from state so it is planned again.
-	r.read(ctx, state.ID.ValueString(), state.Labels, &resp.State, &resp.Diagnostics, func() { resp.State.RemoveResource(ctx) })
+	r.read(ctx, state.ID.ValueString(), state, &resp.State, &resp.Diagnostics, func() { resp.State.RemoveResource(ctx) })
 }
 
 // Update is never called: every argument requires replacement.
@@ -163,8 +179,8 @@ func (r *networkResource) ImportState(ctx context.Context, req resource.ImportSt
 }
 
 // read stores the named network in st, or calls missing if it does not
-// exist. prior holds the labels from plan or state (see labelsValue).
-func (r *networkResource) read(ctx context.Context, name string, prior types.Map, st *tfsdk.State, diags *diag.Diagnostics, missing func()) {
+// exist. prior is the plan or state, for maps left unset (see labelsValue).
+func (r *networkResource) read(ctx context.Context, name string, prior networkModel, st *tfsdk.State, diags *diag.Diagnostics, missing func()) {
 	n, err := r.client.Network(ctx, name)
 	if err != nil {
 		diags.AddError("Reading network failed", err.Error())
@@ -181,7 +197,9 @@ func (r *networkResource) read(ctx context.Context, name string, prior types.Map
 		Subnet:   types.StringValue(n.Subnet),
 		SubnetV6: types.StringValue(n.SubnetV6),
 		Gateway:  types.StringValue(n.Gateway),
-		Labels:   labelsValue(ctx, n.Labels, prior, diags),
+		Labels:   labelsValue(ctx, n.Labels, prior.Labels, diags),
+		Plugin:   types.StringValue(n.Plugin),
+		Options:  labelsValue(ctx, n.Options, prior.Options, diags),
 	}
 	diags.Append(st.Set(ctx, &m)...)
 }

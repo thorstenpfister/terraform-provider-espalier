@@ -3,12 +3,14 @@ package provider
 import (
 	"context"
 
+	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/booldefault"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 
 	"github.com/thorstenpfister/terraform-provider-espalier/internal/client"
@@ -23,6 +25,7 @@ type imageModel struct {
 	Name        types.String `tfsdk:"name"`
 	Platform    types.String `tfsdk:"platform"`
 	KeepLocally types.Bool   `tfsdk:"keep_locally"`
+	Scheme      types.String `tfsdk:"scheme"`
 	Digest      types.String `tfsdk:"digest"`
 }
 
@@ -69,6 +72,12 @@ func (r *imageResource) Schema(_ context.Context, _ resource.SchemaRequest, resp
 				Computed: true,
 				Default:  booldefault.StaticBool(false),
 			},
+			"scheme": schema.StringAttribute{
+				MarkdownDescription: "Registry scheme, `http` or `https`, e.g. `http` for a local registry without TLS. " +
+					"Defaults to `https`. Changing it does not pull again.",
+				Optional:   true,
+				Validators: []validator.String{stringvalidator.OneOf("http", "https")},
+			},
 			"digest": schema.StringAttribute{
 				MarkdownDescription: "Digest of the pulled image index or manifest.",
 				Computed:            true,
@@ -88,7 +97,7 @@ func (r *imageResource) Create(ctx context.Context, req resource.CreateRequest, 
 	if resp.Diagnostics.HasError() {
 		return
 	}
-	spec := client.ImageSpec{Reference: plan.Name.ValueString(), Platform: plan.Platform.ValueString()}
+	spec := client.ImageSpec{Reference: plan.Name.ValueString(), Platform: plan.Platform.ValueString(), Scheme: plan.Scheme.ValueString()}
 	if err := r.client.PullImage(ctx, spec); err != nil {
 		resp.Diagnostics.AddError("Pulling image failed", err.Error())
 		return
@@ -130,7 +139,8 @@ func (r *imageResource) Read(ctx context.Context, req resource.ReadRequest, resp
 	resp.Diagnostics.Append(resp.State.Set(ctx, &state)...)
 }
 
-// Update only changes keep_locally; everything else replaces the image.
+// Update only changes keep_locally and scheme; everything else replaces the
+// image.
 func (r *imageResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
 	var plan imageModel
 	resp.Diagnostics.Append(req.Plan.Get(ctx, &plan)...)

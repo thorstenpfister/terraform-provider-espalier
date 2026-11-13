@@ -32,6 +32,7 @@ func (d *containerDataSource) Schema(ctx context.Context, _ datasource.SchemaReq
 	(&containerResource{}).Schema(ctx, resource.SchemaRequest{}, &rs)
 	attrs := computedAttributes(rs.Schema.Attributes)
 	attrs["name"] = dschema.StringAttribute{MarkdownDescription: "Name of the container.", Required: true}
+	attrs["scheme"] = dschema.StringAttribute{MarkdownDescription: "Always null: the runtime does not record the registry scheme.", Computed: true}
 	resp.Schema = dschema.Schema{
 		MarkdownDescription: "A container of the container runtime, e.g. one created outside Terraform. Fails if it " +
 			"does not exist. `image` is fully qualified and `memory` in the largest whole unit.",
@@ -81,6 +82,8 @@ func computedAttributes(attrs map[string]rschema.Attribute) map[string]dschema.A
 			out[name] = dschema.SetAttribute{MarkdownDescription: desc, Computed: true, ElementType: a.ElementType}
 		case rschema.MapAttribute:
 			out[name] = dschema.MapAttribute{MarkdownDescription: desc, Computed: true, ElementType: a.ElementType}
+		case rschema.SingleNestedAttribute:
+			out[name] = dschema.SingleNestedAttribute{MarkdownDescription: desc, Computed: true, Attributes: computedAttributes(a.Attributes)}
 		case rschema.ListNestedAttribute:
 			out[name] = dschema.ListNestedAttribute{MarkdownDescription: desc, Computed: true,
 				NestedObject: dschema.NestedAttributeObject{Attributes: computedAttributes(a.NestedObject.Attributes)}}

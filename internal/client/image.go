@@ -11,6 +11,7 @@ import (
 type ImageSpec struct {
 	Reference string // e.g. "busybox:1.37" or "ghcr.io/org/app@sha256:…"
 	Platform  string // os/arch[/variant]; empty pulls every platform
+	Scheme    string // "http" or "https"; empty for the runtime's default, https
 }
 
 // Image is a local image.
@@ -41,6 +42,9 @@ func (c CLI) PullImage(ctx context.Context, spec ImageSpec) error {
 	args := []string{"image", "pull", "--progress", "none"}
 	if spec.Platform != "" {
 		args = append(args, "--platform", spec.Platform)
+	}
+	if spec.Scheme != "" {
+		args = append(args, "--scheme", spec.Scheme)
 	}
 	_, err := c.Run(ctx, append(args, spec.Reference)...)
 	return err

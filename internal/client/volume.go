@@ -12,6 +12,9 @@ type VolumeSpec struct {
 	Name   string
 	Size   string            // e.g. "2G"; empty for the runtime's default (a sparse 512 GiB image)
 	Labels map[string]string // may be nil
+	// Options are driver-specific; the runtime keeps the requested size
+	// among them as "size", which Volume leaves out.
+	Options map[string]string
 }
 
 // Volume is a volume as the runtime reports it.
@@ -43,6 +46,9 @@ func (c CLI) CreateVolume(ctx context.Context, spec VolumeSpec) error {
 	for _, k := range slices.Sorted(maps.Keys(spec.Labels)) {
 		args = append(args, "--label", k+"="+spec.Labels[k])
 	}
+	for _, k := range slices.Sorted(maps.Keys(spec.Options)) {
+		args = append(args, "--opt", k+"="+spec.Options[k])
+	}
 	_, err := c.Run(ctx, append(args, spec.Name)...)
 	return err
 }
@@ -56,8 +62,13 @@ func (c CLI) Volume(ctx context.Context, name string) (*Volume, error) {
 	for _, v := range list {
 		if v.ID == name {
 			cfg := v.Configuration
+			opts := maps.Clone(cfg.Options)
+			delete(opts, "size")
+			if len(opts) == 0 {
+				opts = nil
+			}
 			return &Volume{
-				VolumeSpec: VolumeSpec{Name: v.ID, Size: cfg.Options["size"], Labels: cfg.Labels},
+				VolumeSpec: VolumeSpec{Name: v.ID, Size: cfg.Options["size"], Labels: cfg.Labels, Options: opts},
 				SizeBytes:  cfg.SizeInBytes,
 				Format:     cfg.Format,
 				Source:     cfg.Source,

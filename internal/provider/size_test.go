@@ -19,3 +19,22 @@ func TestSize(t *testing.T) {
 		}
 	}
 }
+
+func TestSamePlatform(t *testing.T) {
+	for _, c := range []struct {
+		a, b string
+		want bool
+	}{
+		{"linux/arm64", "linux/arm64/v8", true},
+		{"linux/arm64/v8", "linux/arm64/v8", true},
+		{"linux/arm64/v7", "linux/arm64/v8", false},
+		{"linux/amd64", "linux/arm64", false},
+		{"", "", true},
+		{"", "linux/arm64", false},
+		{"linux", "linux/arm64", false},
+	} {
+		if got := samePlatform(c.a, c.b); got != c.want {
+			t.Errorf("samePlatform(%q, %q) = %t, want %t", c.a, c.b, got, c.want)
+		}
+	}
+}

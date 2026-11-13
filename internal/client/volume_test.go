@@ -10,7 +10,7 @@ import (
 // Captured from container 1.7.1: a default volume and one with a size and label.
 const volumesJSON = `[
 {"configuration":{"driver":"local","format":"ext4","labels":{},"name":"plain","options":{},"sizeInBytes":549755813888,"source":"/vols/plain/volume.img"},"id":"plain"},
-{"configuration":{"driver":"local","format":"ext4","labels":{"a":"b"},"name":"sized","options":{"size":"2G"},"sizeInBytes":2147483648,"source":"/vols/sized/volume.img"},"id":"sized"}
+{"configuration":{"driver":"local","format":"ext4","labels":{"a":"b"},"name":"sized","options":{"size":"2G","foo":"bar"},"sizeInBytes":2147483648,"source":"/vols/sized/volume.img"},"id":"sized"}
 ]`
 
 func TestVolume(t *testing.T) {
@@ -19,7 +19,7 @@ func TestVolume(t *testing.T) {
 	for name, want := range map[string]*Volume{
 		"plain": {VolumeSpec: VolumeSpec{Name: "plain", Labels: map[string]string{}},
 			SizeBytes: 549755813888, Format: "ext4", Source: "/vols/plain/volume.img"},
-		"sized": {VolumeSpec: VolumeSpec{Name: "sized", Size: "2G", Labels: map[string]string{"a": "b"}},
+		"sized": {VolumeSpec: VolumeSpec{Name: "sized", Size: "2G", Labels: map[string]string{"a": "b"}, Options: map[string]string{"foo": "bar"}},
 			SizeBytes: 2147483648, Format: "ext4", Source: "/vols/sized/volume.img"},
 		"missing": nil,
 	} {
@@ -39,11 +39,11 @@ func TestCreateVolumeArgs(t *testing.T) {
 		got = strings.Join(args, " ")
 		return nil, nil
 	}
-	err := CLI{Run: run}.CreateVolume(context.Background(), VolumeSpec{Name: "v", Size: "2G", Labels: map[string]string{"a": "b"}})
+	err := CLI{Run: run}.CreateVolume(context.Background(), VolumeSpec{Name: "v", Size: "2G", Labels: map[string]string{"a": "b"}, Options: map[string]string{"foo": "bar"}})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if want := "volume create -s 2G --label a=b v"; got != want {
+	if want := "volume create -s 2G --label a=b --opt foo=bar v"; got != want {
 		t.Errorf("got %q, want %q", got, want)
 	}
 }

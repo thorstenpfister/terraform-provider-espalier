@@ -37,6 +37,8 @@ func TestAccNetwork(t *testing.T) {
 					statecheck.ExpectKnownValue(addr, tfjsonpath.New("id"), knownvalue.StringExact(name)),
 					statecheck.ExpectKnownValue(addr, tfjsonpath.New("internal"), knownvalue.Bool(false)),
 					statecheck.ExpectKnownValue(addr, tfjsonpath.New("subnet"), cidr),
+					statecheck.ExpectKnownValue(addr, tfjsonpath.New("plugin"), knownvalue.StringExact("container-network-vmnet")),
+					statecheck.ExpectKnownValue(addr, tfjsonpath.New("options"), knownvalue.Null()),
 					statecheck.ExpectKnownValue(addr, tfjsonpath.New("gateway"), knownvalue.StringRegexp(regexp.MustCompile(`^[0-9.]+$`))),
 					statecheck.ExpectKnownValue(addr, tfjsonpath.New("labels"), knownvalue.Null()),
 				},
@@ -67,6 +69,8 @@ resource "espalier_network" "test" {
   internal = true
   subnet   = "192.168.231.0/24"
   labels   = { purpose = "espalier-test" }
+  plugin   = "container-network-vmnet"
+  options  = { "espalier.test" = "yes" }
 }`, name),
 				ConfigPlanChecks: resource.ConfigPlanChecks{
 					PreApply: []plancheck.PlanCheck{plancheck.ExpectResourceAction(addr, plancheck.ResourceActionReplace)},
@@ -77,6 +81,8 @@ resource "espalier_network" "test" {
 					statecheck.ExpectKnownValue(addr, tfjsonpath.New("gateway"), knownvalue.StringExact("192.168.231.1")),
 					statecheck.ExpectKnownValue(addr, tfjsonpath.New("labels"),
 						knownvalue.MapExact(map[string]knownvalue.Check{"purpose": knownvalue.StringExact("espalier-test")})),
+					statecheck.ExpectKnownValue(addr, tfjsonpath.New("options"),
+						knownvalue.MapExact(map[string]knownvalue.Check{"espalier.test": knownvalue.StringExact("yes")})),
 				},
 			},
 			{

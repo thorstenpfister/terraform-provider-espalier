@@ -31,23 +31,35 @@ type containerResource struct {
 }
 
 type containerModel struct {
-	ID        types.String `tfsdk:"id"`
-	Name      types.String `tfsdk:"name"`
-	Image     types.String `tfsdk:"image"`
-	Command   types.List   `tfsdk:"command"`
-	Env       types.Map    `tfsdk:"env"`
-	Workdir   types.String `tfsdk:"workdir"`
-	CPUs      types.Int64  `tfsdk:"cpus"`
-	Memory    types.String `tfsdk:"memory"`
-	Labels    types.Map    `tfsdk:"labels"`
-	Networks  types.List   `tfsdk:"networks"`
-	Mounts    types.List   `tfsdk:"mounts"`
-	Ports     types.List   `tfsdk:"ports"`
-	CapAdd    types.Set    `tfsdk:"cap_add"`
-	CapDrop   types.Set    `tfsdk:"cap_drop"`
-	Running   types.Bool   `tfsdk:"running"`
-	State     types.String `tfsdk:"state"`
-	Addresses types.List   `tfsdk:"addresses"`
+	ID             types.String `tfsdk:"id"`
+	Name           types.String `tfsdk:"name"`
+	Image          types.String `tfsdk:"image"`
+	Command        types.List   `tfsdk:"command"`
+	Env            types.Map    `tfsdk:"env"`
+	Workdir        types.String `tfsdk:"workdir"`
+	CPUs           types.Int64  `tfsdk:"cpus"`
+	Memory         types.String `tfsdk:"memory"`
+	Labels         types.Map    `tfsdk:"labels"`
+	Networks       types.List   `tfsdk:"networks"`
+	Mounts         types.List   `tfsdk:"mounts"`
+	Ports          types.List   `tfsdk:"ports"`
+	CapAdd         types.Set    `tfsdk:"cap_add"`
+	CapDrop        types.Set    `tfsdk:"cap_drop"`
+	Platform       types.String `tfsdk:"platform"`
+	User           types.String `tfsdk:"user"`
+	ReadOnly       types.Bool   `tfsdk:"read_only"`
+	Init           types.Bool   `tfsdk:"init"`
+	Rosetta        types.Bool   `tfsdk:"rosetta"`
+	SSH            types.Bool   `tfsdk:"ssh"`
+	NoDNS          types.Bool   `tfsdk:"no_dns"`
+	DNS            types.Object `tfsdk:"dns"`
+	ShmSize        types.String `tfsdk:"shm_size"`
+	Ulimits        types.List   `tfsdk:"ulimits"`
+	PublishSockets types.List   `tfsdk:"publish_sockets"`
+	Scheme         types.String `tfsdk:"scheme"`
+	Running        types.Bool   `tfsdk:"running"`
+	State          types.String `tfsdk:"state"`
+	Addresses      types.List   `tfsdk:"addresses"`
 }
 
 type addressModel struct {
@@ -179,12 +191,17 @@ func (r *containerResource) Schema(_ context.Context, _ resource.SchemaRequest, 
 		},
 	}
 	maps.Copy(resp.Schema.Attributes, attachmentAttributes())
+	maps.Copy(resp.Schema.Attributes, optionAttributes())
 }
 
 func (r *containerResource) ValidateConfig(ctx context.Context, req resource.ValidateConfigRequest, resp *resource.ValidateConfigResponse) {
-	var mounts types.List
-	resp.Diagnostics.Append(req.Config.GetAttribute(ctx, path.Root("mounts"), &mounts)...)
-	validateMounts(ctx, mounts, &resp.Diagnostics)
+	var cfg containerModel
+	resp.Diagnostics.Append(req.Config.Get(ctx, &cfg)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+	validateMounts(ctx, cfg.Mounts, &resp.Diagnostics)
+	validateOptions(ctx, cfg, &resp.Diagnostics)
 }
 
 func (r *containerResource) Configure(_ context.Context, req resource.ConfigureRequest, resp *resource.ConfigureResponse) {
@@ -210,6 +227,7 @@ func (r *containerResource) Create(ctx context.Context, req resource.CreateReque
 	resp.Diagnostics.Append(plan.Env.ElementsAs(ctx, &spec.Env, false)...)
 	resp.Diagnostics.Append(plan.Labels.ElementsAs(ctx, &spec.Labels, false)...)
 	attachmentsSpec(ctx, plan, &spec, &resp.Diagnostics)
+	optionsSpec(ctx, plan, &spec, &resp.Diagnostics)
 	if resp.Diagnostics.HasError() {
 		return
 	}
@@ -318,6 +336,7 @@ func (r *containerResource) read(ctx context.Context, name string, prior contain
 	if b, ok := parseSize(prior.Memory.ValueString()); ok && b == c.MemoryBytes {
 		m.Memory = prior.Memory
 	}
+	keepWrittenOptions(prior, &m)
 	diags.Append(st.Set(ctx, &m)...)
 }
 
@@ -338,6 +357,7 @@ func containerValue(ctx context.Context, c *client.Container, diags *diag.Diagno
 		State:   types.StringValue(c.State),
 	}
 	readAttachments(ctx, c, &m, diags)
+	readOptions(ctx, c, &m, diags)
 	var d diag.Diagnostics
 	m.Command, d = types.ListValueFrom(ctx, types.StringType, c.Command)
 	diags.Append(d...)
@@ -419,6 +439,7 @@ func (r *containerResource) ModifyPlan(ctx context.Context, req resource.ModifyP
 		}
 	}
 	replaceChangedAttachments(plan, state, resp)
+	replaceChangedOptions(plan, state, resp)
 	if !plan.Memory.Equal(state.Memory) {
 		a, okA := parseSize(state.Memory.ValueString())
 		b, okB := parseSize(plan.Memory.ValueString())

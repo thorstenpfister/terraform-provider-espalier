@@ -37,6 +37,7 @@ resource "espalier_volume" "cache" {
 ### Optional
 
 - `labels` (Map of String) Labels attached to the volume.
+- `options` (Map of String) Driver-specific options (`--opt key=value`). Use `size` for the size, not an option.
 - `size` (String) Size in bytes, with an optional `K`, `M`, `G`, `T` or `P` suffix, e.g. `2G`. If not set, the runtime creates a sparse 512 GiB image.
 
 ### Read-Only

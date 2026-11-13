@@ -36,6 +36,7 @@ resource "espalier_image" "registry" {
 
 - `keep_locally` (Boolean) Keep the image in the runtime when the resource is destroyed, e.g. when other configurations use it too. Defaults to `false`.
 - `platform` (String) Pull only this platform (`os/arch[/variant]`, e.g. `linux/arm64`). Pulls all platforms if not set.
+- `scheme` (String) Registry scheme, `http` or `https`, e.g. `http` for a local registry without TLS. Defaults to `https`. Changing it does not pull again.
 
 ### Read-Only
 

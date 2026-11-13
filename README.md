@@ -18,11 +18,11 @@ Available today:
 | Kind | Name | What |
 |---|---|---|
 | Data source | `espalier_system` | Runtime running?, client and server version, default kernel |
-| Resource | `espalier_network` | NAT or host-only network, optional fixed subnets, labels; import by name |
-| Resource | `espalier_volume` | Disk-image volume, optional size, labels; import by name |
-| Resource | `espalier_image` | Pulled image, optional platform, `keep_locally`; import by reference |
+| Resource | `espalier_network` | NAT or host-only network, optional fixed subnets, labels, plugin and plugin options; import by name |
+| Resource | `espalier_volume` | Disk-image volume, optional size, labels, driver options; import by name |
+| Resource | `espalier_image` | Pulled image, optional platform, `http` registries, `keep_locally`; import by reference |
 | Data source | `espalier_image` | Image already in the runtime: digest, platforms |
-| Resource | `espalier_container` | Image, command, env, workdir, CPUs, memory, labels; networks (MAC, MTU, aliases), bind/volume/tmpfs mounts, published ports, capabilities; running state, addresses; import by name |
+| Resource | `espalier_container` | Image, command, env, workdir, CPUs, memory, labels; networks (MAC, MTU, aliases), bind/volume/tmpfs mounts, published ports, capabilities; platform, user, read-only root, DNS, init, Rosetta, SSH agent, `/dev/shm`, ulimits, published sockets, `http` registries; running state, addresses; import by name |
 | Data source | `espalier_container` | Existing container, as the resource describes it |
 
 Early development: the scope planned for v1 is in place, but nothing is released yet.

@@ -62,7 +62,8 @@ func TestAccVolume(t *testing.T) {
 resource "espalier_volume" "test" {
   name   = %q
   size   = "64M"
-  labels = { purpose = "espalier-test" }
+  labels  = { purpose = "espalier-test" }
+  options = { "espalier.test" = "yes" }
 }`, name),
 				ConfigPlanChecks: resource.ConfigPlanChecks{
 					PreApply: []plancheck.PlanCheck{plancheck.ExpectResourceAction(addr, plancheck.ResourceActionReplace)},
@@ -72,6 +73,9 @@ resource "espalier_volume" "test" {
 					statecheck.ExpectKnownValue(addr, tfjsonpath.New("size_bytes"), knownvalue.Int64Exact(64<<20)),
 					statecheck.ExpectKnownValue(addr, tfjsonpath.New("labels"),
 						knownvalue.MapExact(map[string]knownvalue.Check{"purpose": knownvalue.StringExact("espalier-test")})),
+					// The requested size, which the runtime also keeps among the options, is left out.
+					statecheck.ExpectKnownValue(addr, tfjsonpath.New("options"),
+						knownvalue.MapExact(map[string]knownvalue.Check{"espalier.test": knownvalue.StringExact("yes")})),
 				},
 			},
 			{ResourceName: addr, ImportState: true, ImportStateId: name, ImportStateVerify: true},

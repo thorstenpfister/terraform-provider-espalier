@@ -37,16 +37,28 @@ output "dns_ipv4" {
 - `cap_drop` (Set of String) Linux capabilities to drop, e.g. `CAP_MKNOD`, or `ALL`.
 - `command` (List of String) The process to run, as a full argument list (its first element replaces the image's entrypoint). Defaults to the image's entrypoint and command.
 - `cpus` (Number) Number of CPUs. Defaults to the runtime's `container.cpus` property.
+- `dns` (Attributes) Resolver configuration. The runtime's defaults apply to whatever is not set. (see [below for nested schema](#nestedatt--dns))
 - `env` (Map of String) Environment variables, on top of the image's environment.
 - `id` (String) The container's name.
 - `image` (String) Image reference, resolved like `espalier_image`'s `name`. The runtime pulls it if it is missing; use `espalier_image` to control pulling and pin versions.
+- `init` (Boolean) Run an init process that forwards signals and reaps zombies. Defaults to `false`.
 - `labels` (Map of String) Labels attached to the container.
 - `memory` (String) Memory in bytes, with an optional `K`, `M`, `G`, `T` or `P` suffix, e.g. `512M`. Defaults to the runtime's `container.memory` property.
 - `mounts` (Attributes List) Filesystems to mount. (see [below for nested schema](#nestedatt--mounts))
 - `networks` (Attributes List) Networks to attach, in order; the first is the primary one. Defaults to the runtime's `default` network. (see [below for nested schema](#nestedatt--networks))
+- `no_dns` (Boolean) Leave the container without any DNS configuration (`--no-dns`). Conflicts with `dns`. Without either, the runtime configures its own resolver. Defaults to `false`.
+- `platform` (String) Platform of a multi-platform image (`os/arch[/variant]`, e.g. `linux/amd64`, which runs with Rosetta). Defaults to the host's. The runtime records the variant: `linux/arm64` and `linux/arm64/v8` are the same.
 - `ports` (Attributes List) Container ports to publish on the host. (see [below for nested schema](#nestedatt--ports))
+- `publish_sockets` (Attributes List) Unix sockets in the container to publish on the host. (see [below for nested schema](#nestedatt--publish_sockets))
+- `read_only` (Boolean) Mount the root filesystem read-only. Defaults to `false`.
+- `rosetta` (Boolean) Enable Rosetta, to run x86-64 binaries. Defaults to `false`.
 - `running` (Boolean) Whether the container should run. Changes start or stop it in place; a container stopped outside Terraform is started again. Defaults to `true`.
+- `scheme` (String) Always null: the runtime does not record the registry scheme.
+- `shm_size` (String) Size of `/dev/shm`, with an optional `K`, `M`, `G`, `T` or `P` suffix. Defaults to the runtime's.
+- `ssh` (Boolean) Forward the host's SSH agent socket into the container. Defaults to `false`.
 - `state` (String) State as the runtime reports it, e.g. `running` or `stopped`.
+- `ulimits` (Attributes List) Resource limits of the process. (see [below for nested schema](#nestedatt--ulimits))
+- `user` (String) User of the process, as `name`, `uid` or `uid:gid`. Defaults to the image's, else `0:0`.
 - `workdir` (String) Working directory of the process. Defaults to the image's, else `/`.
 
 <a id="nestedatt--addresses"></a>
@@ -59,6 +71,17 @@ Read-Only:
 - `ipv6_address` (String) IPv6 address with prefix length.
 - `mac_address` (String) MAC address.
 - `network` (String) Network name.
+
+
+<a id="nestedatt--dns"></a>
+### Nested Schema for `dns`
+
+Read-Only:
+
+- `domain` (String) Default domain.
+- `nameservers` (List of String) Nameserver IP addresses.
+- `options` (List of String) Resolver options, e.g. `ndots:2`.
+- `search_domains` (List of String) Search domains.
 
 
 <a id="nestedatt--mounts"></a>
@@ -92,3 +115,22 @@ Read-Only:
 - `host_ip` (String) Host address to listen on. Defaults to `0.0.0.0`, all IPv4 addresses.
 - `host_port` (Number) Host port.
 - `protocol` (String) `tcp` or `udp`. Defaults to `tcp`.
+
+
+<a id="nestedatt--publish_sockets"></a>
+### Nested Schema for `publish_sockets`
+
+Read-Only:
+
+- `container_path` (String) Absolute path of the socket in the container.
+- `host_path` (String) Absolute path of the socket on the host.
+
+
+<a id="nestedatt--ulimits"></a>
+### Nested Schema for `ulimits`
+
+Read-Only:
+
+- `hard` (Number) Hard limit.
+- `name` (String) Limit, as `ulimit` names it without `RLIMIT_`, e.g. `nofile` or `nproc`.
+- `soft` (Number) Soft limit.

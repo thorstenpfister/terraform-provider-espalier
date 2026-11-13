@@ -28,6 +28,7 @@ resource "espalier_image" "test" {
   name         = %q
   platform     = "linux/arm64"
   keep_locally = %t
+  scheme       = "https"
 }
 
 data "espalier_image" "test" {
@@ -63,7 +64,7 @@ func TestAccImage(t *testing.T) {
 				ImportState:             true,
 				ImportStateId:           testImage,
 				ImportStateVerify:       true,
-				ImportStateVerifyIgnore: []string{"platform"}, // the runtime does not record it
+				ImportStateVerifyIgnore: []string{"platform", "scheme"}, // the runtime does not record them
 			},
 			// Removed outside Terraform: pulled again.
 			{

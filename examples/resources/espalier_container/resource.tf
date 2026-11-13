@@ -37,3 +37,26 @@ resource "espalier_container" "web" {
 output "web_ipv4" {
   value = espalier_container.web.addresses[0].ipv4_address
 }
+
+# A locked-down worker: x86-64 image under Rosetta, unprivileged user,
+# read-only root, own resolver, and an image from a local registry
+# without TLS.
+resource "espalier_container" "worker" {
+  name      = "worker"
+  image     = "localhost:5000/worker:1.0"
+  scheme    = "http"
+  platform  = "linux/amd64"
+  rosetta   = true
+  user      = "1000:1000"
+  read_only = true
+  init      = true
+  shm_size  = "128M"
+  cap_drop  = ["ALL"]
+
+  dns = {
+    nameservers    = ["192.168.100.53"]
+    search_domains = ["apps.test"]
+  }
+  ulimits = [{ name = "nofile", soft = 4096, hard = 8192 }]
+  mounts  = [{ type = "tmpfs", target = "/tmp" }]
+}
