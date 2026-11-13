@@ -11,6 +11,11 @@ type Client interface {
 	// System reports whether the runtime is running, its versions and the
 	// default kernel. A stopped runtime is not an error: Running is false.
 	System(ctx context.Context) (System, error)
+
+	CreateNetwork(ctx context.Context, spec NetworkSpec) error
+	// Network returns nil, without an error, if the network does not exist.
+	Network(ctx context.Context, name string) (*Network, error)
+	DeleteNetwork(ctx context.Context, name string) error
 }
 
 // System describes the runtime on this host.

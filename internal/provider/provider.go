@@ -64,7 +64,9 @@ func (p *espalierProvider) Configure(ctx context.Context, req provider.Configure
 }
 
 func (p *espalierProvider) Resources(context.Context) []func() resource.Resource {
-	return nil
+	return []func() resource.Resource{
+		NewNetworkResource,
+	}
 }
 
 func (p *espalierProvider) DataSources(context.Context) []func() datasource.DataSource {
