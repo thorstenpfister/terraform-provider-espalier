@@ -21,6 +21,7 @@ const defaultCLIPath = "container"
 
 type espalierProvider struct {
 	version string
+	client  client.Client // for tests; nil runs the CLI
 }
 
 type providerModel struct {
@@ -94,7 +95,11 @@ func (p *espalierProvider) Configure(ctx context.Context, req provider.Configure
 	if !cfg.CLIPath.IsNull() && !cfg.CLIPath.IsUnknown() {
 		path = cfg.CLIPath.ValueString()
 	}
-	data := &providerData{client: client.CLI{Run: client.ExecRunner(path)}, builder: &builder{}}
+	var c client.Client = client.CLI{Run: client.ExecRunner(path)}
+	if p.client != nil {
+		c = p.client
+	}
+	data := &providerData{client: c, builder: &builder{}}
 	if b := cfg.Builder; b != nil {
 		data.builder.settings = client.BuilderSettings{CPUs: b.CPUs.ValueInt64(), Memory: b.Memory.ValueString()}
 		data.builder.keepRunning = b.KeepRunning.ValueBool()

@@ -7,9 +7,12 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"regexp"
+	"strings"
 	"testing"
+	"time"
 
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
 	"github.com/hashicorp/terraform-plugin-testing/knownvalue"
@@ -105,6 +108,18 @@ func TestAccCluster(t *testing.T) {
 					plancheck.ExpectResourceAction(addr, plancheck.ResourceActionUpdate),
 				}},
 			},
+			// A node that died degrades the cluster, which is replaced.
+			{
+				PreConfig: func() { killNode(t, testCluster+"-worker-1") },
+				Config:    clusterConfig("2048M"),
+				ConfigPlanChecks: resource.ConfigPlanChecks{PreApply: []plancheck.PlanCheck{
+					plancheck.ExpectResourceAction(addr, plancheck.ResourceActionDestroyBeforeCreate),
+				}},
+				Check: checkAPIServerReady(addr),
+				ConfigStateChecks: []statecheck.StateCheck{
+					statecheck.ExpectKnownValue(addr, tfjsonpath.New("state"), knownvalue.StringExact("running")),
+				},
+			},
 		},
 	})
 }
@@ -152,6 +167,32 @@ resource "espalier_cluster" "test" {
 			ExpectError: regexp.MustCompile(`must be at least 1`),
 		}},
 	})
+}
+
+// killNode kills the VM process of a cluster node, as a crash or a runtime
+// restart would stop it: `container stop` does not see node containers.
+// The runtime then reports the cluster as degraded (container 1.7.1).
+func killNode(t *testing.T, node string) {
+	t.Helper()
+	out, err := exec.Command("pgrep", "-f", "container-runtime-linux start --root .*/containers/"+node+" ").Output()
+	pids := strings.Fields(string(out))
+	if err != nil || len(pids) != 1 {
+		t.Fatalf("finding the process of node %s: %q, %v", node, out, err)
+	}
+	if err := exec.Command("kill", "-9", pids[0]).Run(); err != nil {
+		t.Fatal(err)
+	}
+	for range 30 {
+		cl, err := testClient.Cluster(context.Background(), testCluster)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if cl != nil && cl.State != clusterRunning {
+			return
+		}
+		time.Sleep(time.Second)
+	}
+	t.Fatalf("cluster still running after killing node %s", node)
 }
 
 // checkAPIServerReady calls the API server's /readyz with the cluster's

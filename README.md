@@ -84,7 +84,7 @@ later without changing the provider.
 ## Development
 
 ```sh
-make test          # unit tests, no runtime needed
+make test          # unit tests: no runtime needed, but Terraform on PATH
 make testacc       # acceptance tests against the local runtime (Terraform)
 make testacc-tofu  # the same with OpenTofu
 make lint
