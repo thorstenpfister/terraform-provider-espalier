@@ -22,8 +22,10 @@ Available today:
 | Resource | `espalier_volume` | Disk-image volume, optional size, labels, driver options; import by name |
 | Resource | `espalier_image` | Pulled image, optional platform, `http` registries, `keep_locally`; import by reference |
 | Data source | `espalier_image` | Image already in the runtime: digest, platforms |
+| Resource | `espalier_image_tag` | Another name for a local image, re-tagged if it drifts from its source; import by `source,target` |
 | Resource | `espalier_container` | Image, command, env, workdir, CPUs, memory, labels; networks (MAC, MTU, aliases), bind/volume/tmpfs mounts, published ports, capabilities; platform, user, read-only root, DNS, init, Rosetta, SSH agent, `/dev/shm`, ulimits, published sockets, `http` registries; running state, addresses; import by name |
 | Data source | `espalier_container` | Existing container, as the resource describes it |
+| Data sources | `espalier_networks`, `espalier_volumes`, `espalier_containers`, `espalier_images` | Everything of one kind, sorted by name; filter by labels (not images) |
 
 Early development: the scope planned for v1 is in place, but nothing is released yet.
 

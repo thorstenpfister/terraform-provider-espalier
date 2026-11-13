@@ -190,7 +190,14 @@ func (r *networkResource) read(ctx context.Context, name string, prior networkMo
 		missing()
 		return
 	}
-	m := networkModel{
+	m := networkValue(ctx, n, prior, diags)
+	diags.Append(st.Set(ctx, &m)...)
+}
+
+// networkValue is the network as the runtime reports it; maps left unset in
+// prior (the plan or state) stay null when empty.
+func networkValue(ctx context.Context, n *client.Network, prior networkModel, diags *diag.Diagnostics) networkModel {
+	return networkModel{
 		ID:       types.StringValue(n.Name),
 		Name:     types.StringValue(n.Name),
 		Internal: types.BoolValue(n.Internal),
@@ -201,5 +208,4 @@ func (r *networkResource) read(ctx context.Context, name string, prior networkMo
 		Plugin:   types.StringValue(n.Plugin),
 		Options:  labelsValue(ctx, n.Options, prior.Options, diags),
 	}
-	diags.Append(st.Set(ctx, &m)...)
 }

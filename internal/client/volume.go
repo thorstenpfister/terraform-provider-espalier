@@ -55,27 +55,40 @@ func (c CLI) CreateVolume(ctx context.Context, spec VolumeSpec) error {
 
 // Volume returns the named volume, or nil if it does not exist.
 func (c CLI) Volume(ctx context.Context, name string) (*Volume, error) {
+	volumes, err := c.Volumes(ctx)
+	if err != nil {
+		return nil, err
+	}
+	for _, v := range volumes {
+		if v.Name == name {
+			return &v, nil
+		}
+	}
+	return nil, nil
+}
+
+// Volumes returns all volumes.
+func (c CLI) Volumes(ctx context.Context) ([]Volume, error) {
 	var list []volumeJSON
 	if err := c.json(ctx, &list, "volume", "list", "--format", "json"); err != nil {
 		return nil, err
 	}
+	volumes := make([]Volume, 0, len(list))
 	for _, v := range list {
-		if v.ID == name {
-			cfg := v.Configuration
-			opts := maps.Clone(cfg.Options)
-			delete(opts, "size")
-			if len(opts) == 0 {
-				opts = nil
-			}
-			return &Volume{
-				VolumeSpec: VolumeSpec{Name: v.ID, Size: cfg.Options["size"], Labels: cfg.Labels, Options: opts},
-				SizeBytes:  cfg.SizeInBytes,
-				Format:     cfg.Format,
-				Source:     cfg.Source,
-			}, nil
+		cfg := v.Configuration
+		opts := maps.Clone(cfg.Options)
+		delete(opts, "size")
+		if len(opts) == 0 {
+			opts = nil
 		}
+		volumes = append(volumes, Volume{
+			VolumeSpec: VolumeSpec{Name: v.ID, Size: cfg.Options["size"], Labels: cfg.Labels, Options: opts},
+			SizeBytes:  cfg.SizeInBytes,
+			Format:     cfg.Format,
+			Source:     cfg.Source,
+		})
 	}
-	return nil, nil
+	return volumes, nil
 }
 
 func (c CLI) DeleteVolume(ctx context.Context, name string) error {

@@ -68,6 +68,7 @@ func (p *espalierProvider) Resources(context.Context) []func() resource.Resource
 		NewNetworkResource,
 		NewVolumeResource,
 		NewImageResource,
+		NewImageTagResource,
 		NewContainerResource,
 	}
 }
@@ -77,5 +78,9 @@ func (p *espalierProvider) DataSources(context.Context) []func() datasource.Data
 		NewSystemDataSource,
 		NewImageDataSource,
 		NewContainerDataSource,
+		NewNetworksDataSource,
+		NewVolumesDataSource,
+		NewImagesDataSource,
+		NewContainersDataSource,
 	}
 }

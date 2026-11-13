@@ -90,17 +90,29 @@ func (c CLI) CreateNetwork(ctx context.Context, spec NetworkSpec) error {
 // the list rather than `network inspect`, whose not-found case is only an
 // error message.
 func (c CLI) Network(ctx context.Context, name string) (*Network, error) {
+	networks, err := c.Networks(ctx)
+	if err != nil {
+		return nil, err
+	}
+	for _, n := range networks {
+		if n.Name == name {
+			return &n, nil
+		}
+	}
+	return nil, nil
+}
+
+// Networks returns all networks.
+func (c CLI) Networks(ctx context.Context) ([]Network, error) {
 	var list []networkJSON
 	if err := c.json(ctx, &list, "network", "list", "--format", "json"); err != nil {
 		return nil, err
 	}
+	networks := make([]Network, 0, len(list))
 	for _, n := range list {
-		if n.ID == name {
-			net := n.network()
-			return &net, nil
-		}
+		networks = append(networks, n.network())
 	}
-	return nil, nil
+	return networks, nil
 }
 
 func (c CLI) DeleteNetwork(ctx context.Context, name string) error {

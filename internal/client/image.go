@@ -57,23 +57,41 @@ func (c CLI) Image(ctx context.Context, reference string) (*Image, error) {
 	if err != nil {
 		return nil, err
 	}
+	images, err := c.Images(ctx)
+	if err != nil {
+		return nil, err
+	}
+	for _, img := range images {
+		if img.Name == name {
+			return &img, nil
+		}
+	}
+	return nil, nil
+}
+
+// Images returns all local images.
+func (c CLI) Images(ctx context.Context) ([]Image, error) {
 	var list []imageJSON
 	if err := c.json(ctx, &list, "image", "list", "--format", "json"); err != nil {
 		return nil, err
 	}
+	images := make([]Image, 0, len(list))
 	for _, i := range list {
-		if i.Configuration.Name != name {
-			continue
-		}
-		img := &Image{Name: name, Digest: i.Configuration.Descriptor.Digest}
+		img := Image{Name: i.Configuration.Name, Digest: i.Configuration.Descriptor.Digest}
 		for _, v := range i.Variants {
 			if v.Platform.OS != "unknown" { // not attestation manifests
 				img.Platforms = append(img.Platforms, v.Platform.String())
 			}
 		}
-		return img, nil
+		images = append(images, img)
 	}
-	return nil, nil
+	return images, nil
+}
+
+// TagImage gives the source image another name, target.
+func (c CLI) TagImage(ctx context.Context, source, target string) error {
+	_, err := c.Run(ctx, "image", "tag", source, target)
+	return err
 }
 
 func (c CLI) DeleteImage(ctx context.Context, name string) error {

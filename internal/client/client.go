@@ -16,17 +16,21 @@ type Client interface {
 	// Network returns nil, without an error, if the network does not exist.
 	Network(ctx context.Context, name string) (*Network, error)
 	DeleteNetwork(ctx context.Context, name string) error
+	Networks(ctx context.Context) ([]Network, error)
 
 	CreateVolume(ctx context.Context, spec VolumeSpec) error
 	// Volume returns nil, without an error, if the volume does not exist.
 	Volume(ctx context.Context, name string) (*Volume, error)
 	DeleteVolume(ctx context.Context, name string) error
+	Volumes(ctx context.Context) ([]Volume, error)
 
 	PullImage(ctx context.Context, spec ImageSpec) error
 	// Image resolves a reference to a local image; nil, without an error, if
 	// it has not been pulled.
 	Image(ctx context.Context, reference string) (*Image, error)
 	DeleteImage(ctx context.Context, name string) error
+	Images(ctx context.Context) ([]Image, error)
+	TagImage(ctx context.Context, source, target string) error
 	// ImageName returns the fully qualified name a reference resolves to.
 	ImageName(ctx context.Context, reference string) (string, error)
 
@@ -37,6 +41,7 @@ type Client interface {
 	Container(ctx context.Context, name string) (*Container, error)
 	// DeleteContainer deletes the container, stopping it first if it runs.
 	DeleteContainer(ctx context.Context, name string) error
+	Containers(ctx context.Context) ([]Container, error)
 }
 
 // System describes the runtime on this host.

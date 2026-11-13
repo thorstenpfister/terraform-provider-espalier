@@ -179,6 +179,13 @@ func (r *volumeResource) read(ctx context.Context, name string, prior volumeMode
 		missing()
 		return
 	}
+	m := volumeValue(ctx, v, prior, diags)
+	diags.Append(st.Set(ctx, &m)...)
+}
+
+// volumeValue is the volume as the runtime reports it; maps left unset in
+// prior (the plan or state) stay null when empty.
+func volumeValue(ctx context.Context, v *client.Volume, prior volumeModel, diags *diag.Diagnostics) volumeModel {
 	m := volumeModel{
 		ID:        types.StringValue(v.Name),
 		Name:      types.StringValue(v.Name),
@@ -192,5 +199,5 @@ func (r *volumeResource) read(ctx context.Context, name string, prior volumeMode
 	if v.Size != "" {
 		m.Size = types.StringValue(v.Size)
 	}
-	diags.Append(st.Set(ctx, &m)...)
+	return m
 }

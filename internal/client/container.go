@@ -317,21 +317,44 @@ func (spec ContainerSpec) optionArgs() []string {
 
 // Container returns the named container, or nil if it does not exist.
 func (c CLI) Container(ctx context.Context, name string) (*Container, error) {
+	containers, err := c.Containers(ctx)
+	if err != nil {
+		return nil, err
+	}
+	for _, ctr := range containers {
+		if ctr.Name == name {
+			return &ctr, nil
+		}
+	}
+	return nil, nil
+}
+
+// Containers returns all containers, running or not.
+func (c CLI) Containers(ctx context.Context) ([]Container, error) {
 	var list []containerJSON
 	if err := c.json(ctx, &list, "list", "--all", "--format", "json"); err != nil {
 		return nil, err
 	}
-	i := slices.IndexFunc(list, func(j containerJSON) bool { return j.ID == name })
-	if i < 0 {
+	if len(list) == 0 {
 		return nil, nil
 	}
-	j := list[i]
-	cfg := j.Configuration
-	defaults, err := c.imageConfig(ctx, cfg.Image.Reference, cfg.Platform)
-	if err != nil {
+	var images []imageJSON
+	if err := c.json(ctx, &images, "image", "list", "--format", "json"); err != nil {
 		return nil, err
 	}
-	ctr := &Container{
+	containers := make([]Container, 0, len(list))
+	for _, j := range list {
+		containers = append(containers, j.container(images))
+	}
+	return containers, nil
+}
+
+// container converts the JSON; images is the image list, for the
+// environment the container inherits from its image.
+func (j containerJSON) container(images []imageJSON) Container {
+	cfg := j.Configuration
+	defaults := imageConfig(images, cfg.Image.Reference, cfg.Platform)
+	ctr := Container{
 		ContainerSpec: ContainerSpec{
 			Name:    j.ID,
 			Image:   cfg.Image.Reference,
@@ -399,7 +422,7 @@ func (c CLI) Container(ctx context.Context, name string) (*Container, error) {
 			Network: n.Network, IPv4: n.IPv4Address, IPv4Gateway: n.IPv4Gateway, IPv6: n.IPv6Address, MAC: n.MacAddress,
 		})
 	}
-	return ctr, nil
+	return ctr
 }
 
 func (c CLI) DeleteContainer(ctx context.Context, name string) error {
@@ -431,20 +454,16 @@ type imageDefaults struct {
 
 // imageConfig returns the configuration of the image variant a container
 // runs. An image deleted since the container was created has none.
-func (c CLI) imageConfig(ctx context.Context, reference string, platform platformJSON) (imageDefaults, error) {
-	var list []imageJSON
-	if err := c.json(ctx, &list, "image", "list", "--format", "json"); err != nil {
-		return imageDefaults{}, err
-	}
-	for _, i := range list {
+func imageConfig(images []imageJSON, reference string, platform platformJSON) imageDefaults {
+	for _, i := range images {
 		if i.Configuration.Name != reference {
 			continue
 		}
 		for _, v := range i.Variants {
 			if v.Platform == platform {
-				return v.Config.Config, nil
+				return v.Config.Config
 			}
 		}
 	}
-	return imageDefaults{}, nil
+	return imageDefaults{}
 }
