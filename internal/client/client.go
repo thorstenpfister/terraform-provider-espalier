@@ -16,6 +16,11 @@ type Client interface {
 	// Network returns nil, without an error, if the network does not exist.
 	Network(ctx context.Context, name string) (*Network, error)
 	DeleteNetwork(ctx context.Context, name string) error
+
+	CreateVolume(ctx context.Context, spec VolumeSpec) error
+	// Volume returns nil, without an error, if the volume does not exist.
+	Volume(ctx context.Context, name string) (*Volume, error)
+	DeleteVolume(ctx context.Context, name string) error
 }
 
 // System describes the runtime on this host.

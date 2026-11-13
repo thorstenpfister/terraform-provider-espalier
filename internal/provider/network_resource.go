@@ -2,7 +2,6 @@ package provider
 
 import (
 	"context"
-	"fmt"
 
 	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/path"
@@ -99,15 +98,7 @@ func (r *networkResource) Schema(_ context.Context, _ resource.SchemaRequest, re
 }
 
 func (r *networkResource) Configure(_ context.Context, req resource.ConfigureRequest, resp *resource.ConfigureResponse) {
-	if req.ProviderData == nil {
-		return
-	}
-	c, ok := req.ProviderData.(client.Client)
-	if !ok {
-		resp.Diagnostics.AddError("Unexpected provider data", fmt.Sprintf("got %T, want client.Client", req.ProviderData))
-		return
-	}
-	r.client = c
+	r.client = clientFrom(req.ProviderData, &resp.Diagnostics)
 }
 
 func (r *networkResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
@@ -172,8 +163,7 @@ func (r *networkResource) ImportState(ctx context.Context, req resource.ImportSt
 }
 
 // read stores the named network in st, or calls missing if it does not
-// exist. prior holds the configured labels: an empty label set reads back
-// as {} and must not turn a null into a diff.
+// exist. prior holds the labels from plan or state (see labelsValue).
 func (r *networkResource) read(ctx context.Context, name string, prior types.Map, st *tfsdk.State, diags *diag.Diagnostics, missing func()) {
 	n, err := r.client.Network(ctx, name)
 	if err != nil {
@@ -191,12 +181,7 @@ func (r *networkResource) read(ctx context.Context, name string, prior types.Map
 		Subnet:   types.StringValue(n.Subnet),
 		SubnetV6: types.StringValue(n.SubnetV6),
 		Gateway:  types.StringValue(n.Gateway),
-		Labels:   types.MapNull(types.StringType),
-	}
-	if len(n.Labels) > 0 || !prior.IsNull() {
-		labels, d := types.MapValueFrom(ctx, types.StringType, n.Labels)
-		diags.Append(d...)
-		m.Labels = labels
+		Labels:   labelsValue(ctx, n.Labels, prior, diags),
 	}
 	diags.Append(st.Set(ctx, &m)...)
 }

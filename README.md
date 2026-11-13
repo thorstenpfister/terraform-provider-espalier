@@ -19,8 +19,9 @@ Early development. Available today:
 |---|---|---|
 | Data source | `espalier_system` | Runtime running?, client and server version, default kernel |
 | Resource | `espalier_network` | NAT or host-only network, optional fixed subnets, labels; import by name |
+| Resource | `espalier_volume` | Disk-image volume, optional size, labels; import by name |
 
-Planned for v1: resources `espalier_volume`,
+Planned for v1: resources
 `espalier_image` and `espalier_container` (with import), and data sources
 `espalier_image` and `espalier_container`.
 
