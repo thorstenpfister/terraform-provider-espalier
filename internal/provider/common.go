@@ -10,17 +10,32 @@ import (
 	"github.com/thorstenpfister/terraform-provider-espalier/internal/client"
 )
 
-// clientFrom unpacks the client that Configure handed to resources and data
-// sources. It returns nil before the provider is configured.
-func clientFrom(providerData any, diags *diag.Diagnostics) client.Client {
-	if providerData == nil {
+// providerData is what Configure hands to resources and data sources.
+type providerData struct {
+	client  client.Client
+	builder *builder
+}
+
+// dataFrom unpacks the provider data. It returns nil before the provider is
+// configured.
+func dataFrom(data any, diags *diag.Diagnostics) *providerData {
+	if data == nil {
 		return nil
 	}
-	c, ok := providerData.(client.Client)
+	d, ok := data.(*providerData)
 	if !ok {
-		diags.AddError("Unexpected provider data", fmt.Sprintf("got %T, want client.Client", providerData))
+		diags.AddError("Unexpected provider data", fmt.Sprintf("got %T, want *providerData", data))
 	}
-	return c
+	return d
+}
+
+// clientFrom unpacks the client from the provider data, or returns nil
+// before the provider is configured.
+func clientFrom(data any, diags *diag.Diagnostics) client.Client {
+	if d := dataFrom(data, diags); d != nil {
+		return d.client
+	}
+	return nil
 }
 
 // labelsValue converts labels read from the runtime. The runtime reports an

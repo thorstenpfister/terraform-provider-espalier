@@ -34,6 +34,13 @@ type Client interface {
 	// ImageName returns the fully qualified name a reference resolves to.
 	ImageName(ctx context.Context, reference string) (string, error)
 
+	BuildImage(ctx context.Context, spec BuildSpec) error
+	BuilderRunning(ctx context.Context) (bool, error)
+	// StartBuilder starts the builder, or recreates a running one whose
+	// settings differ.
+	StartBuilder(ctx context.Context, settings BuilderSettings) error
+	StopBuilder(ctx context.Context) error
+
 	CreateContainer(ctx context.Context, spec ContainerSpec) error
 	StartContainer(ctx context.Context, name string) error
 	StopContainer(ctx context.Context, name string) error
