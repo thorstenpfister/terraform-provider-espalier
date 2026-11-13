@@ -29,8 +29,13 @@ Available today:
 | Resource | `espalier_machine` | Container machine (long-lived dev VM): image, platform, account, CPUs, memory, home mount, nested virtualization, kernel, default machine, running state; settings change in place; import by name |
 | Data sources | `espalier_networks`, `espalier_volumes`, `espalier_containers`, `espalier_images` | Everything of one kind, sorted by name; filter by labels (not images) |
 
-Planned before the first release: registry logins and the remaining niche `container create`
-options.
+Planned before the first release: the remaining niche `container create` options.
+
+Blocked upstream: registry logins (`container registry login`). The runtime stores the
+credentials, but pulls then fail to read them from the Keychain (`status -25308`, see
+[apple/container#1733](https://github.com/apple/container/issues/1733) and
+[#1310](https://github.com/apple/container/issues/1310)), at least with the Homebrew build.
+`espalier_registry_login` follows once that works.
 
 Out of scope: host-wide settings that no single configuration owns, such as the default kernel
 (`container system kernel set`), and local DNS domains (`container system dns create`), which
