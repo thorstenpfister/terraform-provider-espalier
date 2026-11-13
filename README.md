@@ -131,6 +131,56 @@ deliberate check:
 4. Update `testedCLIVersion` in `internal/provider/host_test.go` and the
    version above.
 
+## Releasing
+
+Releases are built by goreleaser (`.goreleaser.yml`) in GitHub Actions
+when a `v*` tag is pushed: a darwin/arm64 zip, a `SHA256SUMS` file signed
+with the project's GPG key, and the registry manifest, as a draft GitHub
+release. `make release-check` validates the configuration and builds an
+unsigned snapshot into `dist/`. Every push also runs the unit tests, lint
+and a check that `docs/` is up to date (`.github/workflows/test.yml`).
+
+### One-time setup
+
+1. A dedicated RSA signing key (the Terraform Registry accepts only RSA and
+   DSA keys), its passphrase kept in the macOS Keychain:
+
+   ```sh
+   security add-generic-password -a "$USER" -s espalier-release-gpg -w "$(openssl rand -base64 32)"
+   gpg --batch --pinentry-mode loopback --passphrase "$(security find-generic-password -s espalier-release-gpg -w)" \
+     --quick-generate-key "espalier releases <you@example.com>" rsa4096 sign 3y
+   ```
+
+   Back up the secret key offline: losing it means a new key in both
+   registries.
+2. Repository secrets for the release workflow:
+
+   ```sh
+   FPR=$(gpg --list-secret-keys --with-colons "espalier releases" | awk -F: '/^fpr/ {print $10; exit}')
+   gpg --batch --pinentry-mode loopback --passphrase "$(security find-generic-password -s espalier-release-gpg -w)" \
+     --armor --export-secret-keys "$FPR" | gh secret set GPG_PRIVATE_KEY
+   security find-generic-password -s espalier-release-gpg -w | gh secret set GPG_PASSPHRASE
+   ```
+
+3. With the repository public, register the provider and the public key
+   (`gpg --armor --export "$FPR"`):
+   - Terraform Registry: sign in at registry.terraform.io with GitHub, add
+     the key under *User Settings → Signing Keys*, then *Publish → Provider*
+     and select this repository.
+   - OpenTofu Registry: open the *Submit new Provider* and *Submit new
+     Provider Signing Key* issues at
+     [opentofu/registry](https://github.com/opentofu/registry/issues/new/choose).
+
+### Each release
+
+1. On `main`, both acceptance suites green (`make testacc`,
+   `make testacc-tofu`) on the tested runtime version.
+2. `git tag vX.Y.Z && git push origin vX.Y.Z`; the release workflow creates
+   a draft.
+3. Review the draft (four assets: zip, `SHA256SUMS`, its `.sig`, manifest)
+   and publish it. The Terraform Registry picks it up through its webhook,
+   the OpenTofu Registry within the hour.
+
 ## License
 
 Apache License 2.0, like Apple's `container`. See [LICENSE](LICENSE).

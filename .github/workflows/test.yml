@@ -1,0 +1,32 @@
+# Unit tests, lint and generated docs on every push and pull request. The
+# acceptance tests need Apple's container runtime, and so a Mac with
+# nested virtualization that hosted runners lack: run them locally
+# (make testacc, make testacc-tofu).
+name: test
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+      # Includes the schema rules and the plan tests against a fake runtime;
+      # the testing framework downloads Terraform for them.
+      - run: go test ./...
+      - uses: golangci/golangci-lint-action@ba0d7d2ec06a0ea1cb5fa41b2e4a3ab91d21278a # v9.3.0
+        with:
+          version: v2.15.0
+      - name: docs/ matches the schema, examples and templates
+        run: |
+          go generate ./...
+          git diff --exit-code -- docs
