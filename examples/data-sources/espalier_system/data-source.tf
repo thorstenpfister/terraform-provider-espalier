@@ -11,3 +11,8 @@ data "espalier_system" "this" {
 output "runtime" {
   value = "container ${data.espalier_system.this.client_version}, kernel ${data.espalier_system.this.kernel_binary_path}"
 }
+
+# Short image names resolve against this registry.
+output "registry" {
+  value = data.espalier_system.this.registry_domain
+}

@@ -37,6 +37,9 @@ func TestMachine(t *testing.T) {
 	if got, err := c.Machine(context.Background(), "missing"); got != nil || err != nil {
 		t.Errorf("missing: got %+v, %v; want nil, nil", got, err)
 	}
+	if all, err := c.Machines(context.Background()); err != nil || !reflect.DeepEqual(all, []Machine{*want}) {
+		t.Errorf("Machines: got %+v, %v", all, err)
+	}
 }
 
 func TestMachineArgs(t *testing.T) {

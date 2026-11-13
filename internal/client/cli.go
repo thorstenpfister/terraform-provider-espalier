@@ -8,6 +8,8 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"regexp"
+	"strconv"
 	"strings"
 )
 
@@ -103,18 +105,105 @@ func (c CLI) System(ctx context.Context) (System, error) {
 	}
 	sys.ServerVersion = status.Server.Version
 
-	var props struct {
-		Kernel struct {
-			BinaryPath string `json:"binaryPath"`
-			URL        string `json:"url"`
-			Digest     string `json:"digest"`
-		} `json:"kernel"`
-	}
+	var props propertiesJSON
 	if err := c.json(ctx, &props, "system", "property", "list", "--format", "json"); err != nil {
 		return System{}, err
 	}
 	sys.Kernel = Kernel(props.Kernel)
+	if sys.Properties, err = props.properties(); err != nil {
+		return System{}, err
+	}
 	return sys, nil
+}
+
+// propertiesJSON is the output of `container system property list --format
+// json` (container 1.7.1; keys from its config.toml reference).
+type propertiesJSON struct {
+	Build struct {
+		CPUs    int64  `json:"cpus"`
+		Memory  string `json:"memory"`
+		Rosetta bool   `json:"rosetta"`
+		Image   string `json:"image"`
+	} `json:"build"`
+	Container struct {
+		CPUs   int64  `json:"cpus"`
+		Memory string `json:"memory"`
+		DNS    struct {
+			Domain        string   `json:"domain"`
+			Nameservers   []string `json:"nameservers"`
+			SearchDomains []string `json:"searchDomains"`
+			Options       []string `json:"options"`
+		} `json:"dns"`
+	} `json:"container"`
+	DNS struct {
+		Domain string `json:"domain"`
+	} `json:"dns"`
+	Kernel struct {
+		BinaryPath string `json:"binaryPath"`
+		URL        string `json:"url"`
+		Digest     string `json:"digest"`
+	} `json:"kernel"`
+	Machine struct {
+		CPUs           int64  `json:"cpus"`
+		Memory         string `json:"memory"`
+		HomeMount      string `json:"homeMount"`
+		Virtualization bool   `json:"virtualization"`
+	} `json:"machine"`
+	Network struct {
+		Subnet   string `json:"subnet"`
+		SubnetV6 string `json:"subnetv6"`
+	} `json:"network"`
+	Registry struct {
+		Domain string `json:"domain"`
+	} `json:"registry"`
+	VMInit struct {
+		Image string `json:"image"`
+	} `json:"vminit"`
+}
+
+func (j propertiesJSON) properties() (Properties, error) {
+	p := Properties{
+		RegistryDomain:  j.Registry.Domain,
+		DNSDomain:       j.DNS.Domain,
+		VMInitImage:     j.VMInit.Image,
+		NetworkSubnet:   j.Network.Subnet,
+		NetworkSubnetV6: j.Network.SubnetV6,
+	}
+	d := j.Container.DNS
+	p.Container.CPUs = j.Container.CPUs
+	p.Container.DNS = DNS{Nameservers: d.Nameservers, Domain: d.Domain, Search: d.SearchDomains, Options: d.Options}
+	p.Builder.CPUs, p.Builder.Rosetta, p.Builder.Image = j.Build.CPUs, j.Build.Rosetta, j.Build.Image
+	p.Machine.CPUs, p.Machine.HomeMount, p.Machine.Virtualization = j.Machine.CPUs, j.Machine.HomeMount, j.Machine.Virtualization
+	for _, m := range []struct {
+		value string
+		bytes *int64
+	}{{j.Container.Memory, &p.Container.MemoryBytes}, {j.Build.Memory, &p.Builder.MemoryBytes}, {j.Machine.Memory, &p.Machine.MemoryBytes}} {
+		b, err := ParseMemorySize(m.value)
+		if err != nil {
+			return Properties{}, err
+		}
+		*m.bytes = b
+	}
+	return p, nil
+}
+
+var memorySizePattern = regexp.MustCompile(`^([0-9]+)\s*([kmgtp]?)(i?b)?$`)
+
+// ParseMemorySize parses a size as config.toml writes it, e.g. "2048mb",
+// "1g" or "12gb", in binary units; "" is 0.
+func ParseMemorySize(s string) (int64, error) {
+	if s == "" {
+		return 0, nil
+	}
+	m := memorySizePattern.FindStringSubmatch(strings.ToLower(strings.TrimSpace(s)))
+	if m == nil {
+		return 0, fmt.Errorf("unexpected memory size %q", s)
+	}
+	n, err := strconv.ParseInt(m[1], 10, 64)
+	if err != nil {
+		return 0, fmt.Errorf("unexpected memory size %q: %w", s, err)
+	}
+	return n << map[string]uint{"": 0, "k": 10, "m": 20, "g": 30, "t": 40, "p": 50}[m[2]], nil
 }
 
 // json runs the CLI and decodes its standard output into v.

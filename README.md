@@ -17,7 +17,7 @@ Available today:
 
 | Kind | Name | What |
 |---|---|---|
-| Data source | `espalier_system` | Runtime running?, client and server version, default kernel |
+| Data source | `espalier_system` | Runtime running?, client and server version, default kernel, `config.toml` defaults (registry domain, container/builder/machine defaults, network subnets, vminit image) |
 | Resource | `espalier_network` | NAT or host-only network, optional fixed subnets, labels, plugin and plugin options; import by name |
 | Resource | `espalier_volume` | Disk-image volume, optional size, labels, driver options; import by name |
 | Resource | `espalier_image` | Pulled image, optional platform, `http` registries, `keep_locally`; import by reference |
@@ -28,7 +28,8 @@ Available today:
 | Data source | `espalier_container` | Existing container, as the resource describes it |
 | Resource | `espalier_machine` | Container machine (long-lived dev VM): image, platform, account, CPUs, memory, home mount, nested virtualization, kernel, default machine, running state; settings change in place; import by name |
 | Resource | `espalier_cluster` | Local Kubernetes cluster (experimental in the runtime): node image, control-plane size, worker groups, CNI or none; kubeconfig and admin credentials for the `kubernetes`/`helm` providers, never touching `~/.kube/config`; create timeout that cleans up; replaced when degraded (e.g. after a runtime restart); import by name |
-| Data sources | `espalier_networks`, `espalier_volumes`, `espalier_containers`, `espalier_images` | Everything of one kind, sorted by name; filter by labels (not images) |
+| Data sources | `espalier_network`, `espalier_volume`, `espalier_machine` | One existing object by name, as its resource describes it |
+| Data sources | `espalier_networks`, `espalier_volumes`, `espalier_containers`, `espalier_images`, `espalier_machines` | Everything of one kind, sorted by name; filter by labels (networks, volumes, containers) |
 
 Blocked upstream: registry logins (`container registry login`). The runtime stores the
 credentials, but pulls then fail to read them from the Keychain (`status -25308`, see

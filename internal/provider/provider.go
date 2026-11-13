@@ -125,5 +125,9 @@ func (p *espalierProvider) DataSources(context.Context) []func() datasource.Data
 		NewVolumesDataSource,
 		NewImagesDataSource,
 		NewContainersDataSource,
+		NewNetworkDataSource,
+		NewVolumeDataSource,
+		NewMachineDataSource,
+		NewMachinesDataSource,
 	}
 }

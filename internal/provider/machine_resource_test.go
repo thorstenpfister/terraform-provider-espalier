@@ -61,8 +61,21 @@ func TestAccMachine(t *testing.T) {
 		},
 		Steps: []resource.TestStep{
 			{
-				Config: machineConfig("alpine:3.22", 1, "1G", "", true),
+				Config: machineConfig("alpine:3.22", 1, "1G", "", true) + `
+data "espalier_machine" "test" {
+  name = espalier_machine.test.name
+}
+
+data "espalier_machines" "all" {
+  depends_on = [espalier_machine.test]
+}`,
 				ConfigStateChecks: append(status("running"),
+					statecheck.ExpectKnownValue("data.espalier_machine.test", tfjsonpath.New("image"), knownvalue.StringExact("docker.io/library/alpine:3.22")),
+					statecheck.ExpectKnownValue("data.espalier_machine.test", tfjsonpath.New("memory"), knownvalue.StringExact("1G")),
+					statecheck.ExpectKnownValue("data.espalier_machine.test", tfjsonpath.New("kernel"), knownvalue.Null()),
+					statecheck.ExpectKnownValue("data.espalier_machines.all", tfjsonpath.New("machines"), knownvalue.ListPartial(map[int]knownvalue.Check{
+						0: knownvalue.ObjectPartial(map[string]knownvalue.Check{"name": knownvalue.StringExact(testMachine)}),
+					})),
 					statecheck.ExpectKnownValue(addr, tfjsonpath.New("cpus"), knownvalue.Int64Exact(1)),
 					statecheck.ExpectKnownValue(addr, tfjsonpath.New("home_mount"), knownvalue.StringExact("none")),
 					statecheck.ExpectKnownValue(addr, tfjsonpath.New("user"), knownvalue.StringExact(me.Username)),

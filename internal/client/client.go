@@ -58,6 +58,7 @@ type Client interface {
 	SetDefaultMachine(ctx context.Context, name string) error
 	// Machine returns nil, without an error, if the machine does not exist.
 	Machine(ctx context.Context, name string) (*Machine, error)
+	Machines(ctx context.Context) ([]Machine, error)
 	DeleteMachine(ctx context.Context, name string) error
 
 	// CreateCluster waits until the cluster is ready, or ctx is done.
@@ -73,8 +74,37 @@ type System struct {
 	Running       bool
 	Status        string // as reported by `container system status`: "running", "unregistered", …
 	ClientVersion string
-	ServerVersion string // empty unless running
-	Kernel        Kernel // zero unless running
+	ServerVersion string     // empty unless running
+	Kernel        Kernel     // zero unless running
+	Properties    Properties // zero unless running
+}
+
+// Properties are the runtime's defaults from its config.toml, as `container
+// system property list` reports them merged with the built-in ones.
+// Memory sizes are in bytes; unset values are zero.
+type Properties struct {
+	RegistryDomain  string
+	DNSDomain       string // local DNS domain appended to container names
+	VMInitImage     string
+	NetworkSubnet   string
+	NetworkSubnetV6 string
+	Container       struct {
+		CPUs        int64
+		MemoryBytes int64
+		DNS         DNS
+	}
+	Builder struct {
+		CPUs        int64
+		MemoryBytes int64
+		Rosetta     bool
+		Image       string
+	}
+	Machine struct {
+		CPUs           int64
+		MemoryBytes    int64
+		HomeMount      string
+		Virtualization bool
+	}
 }
 
 // Kernel is the runtime's default kernel for new containers.

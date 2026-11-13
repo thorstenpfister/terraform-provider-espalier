@@ -13,6 +13,7 @@ import (
 // Needs a running runtime (`container system start`).
 func TestAccSystemDataSource(t *testing.T) {
 	version := knownvalue.StringRegexp(regexp.MustCompile(`^\d+\.\d+\.\d+`))
+	size := knownvalue.StringRegexp(regexp.MustCompile(`^\d+[KMGTP]?$`))
 	resource.Test(t, resource.TestCase{
 		ProtoV6ProviderFactories: testAccProviders,
 		Steps: []resource.TestStep{{
@@ -23,6 +24,11 @@ func TestAccSystemDataSource(t *testing.T) {
 				statecheck.ExpectKnownValue("data.espalier_system.this", tfjsonpath.New("client_version"), version),
 				statecheck.ExpectKnownValue("data.espalier_system.this", tfjsonpath.New("server_version"), version),
 				statecheck.ExpectKnownValue("data.espalier_system.this", tfjsonpath.New("kernel_url"), knownvalue.StringRegexp(regexp.MustCompile(`^https://`))),
+				statecheck.ExpectKnownValue("data.espalier_system.this", tfjsonpath.New("registry_domain"), knownvalue.NotNull()),
+				statecheck.ExpectKnownValue("data.espalier_system.this", tfjsonpath.New("vminit_image"), knownvalue.StringRegexp(regexp.MustCompile(`vminit`))),
+				statecheck.ExpectKnownValue("data.espalier_system.this", tfjsonpath.New("container_defaults").AtMapKey("memory"), size),
+				statecheck.ExpectKnownValue("data.espalier_system.this", tfjsonpath.New("builder_defaults").AtMapKey("image"), knownvalue.StringRegexp(regexp.MustCompile(`builder`))),
+				statecheck.ExpectKnownValue("data.espalier_system.this", tfjsonpath.New("machine_defaults").AtMapKey("memory"), size),
 			},
 		}},
 	})

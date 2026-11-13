@@ -97,6 +97,25 @@ func NewContainersDataSource() datasource.DataSource {
 	}
 }
 
+// NewMachinesDataSource returns the espalier_machines data source.
+func NewMachinesDataSource() datasource.DataSource {
+	return &listDataSource{
+		kind: "machines", what: "container machines",
+		attributes: machineDataAttributes,
+		list: func(ctx context.Context, c client.Client, diags *diag.Diagnostics) []listItem {
+			machines, err := c.Machines(ctx)
+			if err != nil {
+				diags.AddError("Listing machines failed", err.Error())
+			}
+			items := make([]listItem, 0, len(machines))
+			for _, m := range machines {
+				items = append(items, listItem{nil, machineValue(&m)})
+			}
+			return items
+		},
+	}
+}
+
 // NewImagesDataSource returns the espalier_images data source.
 func NewImagesDataSource() datasource.DataSource {
 	return &listDataSource{

@@ -140,23 +140,53 @@ func (c CLI) SetDefaultMachine(ctx context.Context, name string) error {
 
 // Machine returns the named machine, or nil if it does not exist.
 func (c CLI) Machine(ctx context.Context, name string) (*Machine, error) {
-	var list []machineSummaryJSON
-	if err := c.json(ctx, &list, "machine", "list", "--format", "json"); err != nil {
+	list, err := c.machineList(ctx)
+	if err != nil {
 		return nil, err
 	}
 	i := slices.IndexFunc(list, func(m machineSummaryJSON) bool { return m.ID == name })
 	if i < 0 {
 		return nil, nil
 	}
-	var inspected []machineJSON
-	if err := c.json(ctx, &inspected, "machine", "inspect", name); err != nil {
+	m, err := c.inspectMachine(ctx, list[i])
+	return &m, err
+}
+
+// Machines returns all machines.
+func (c CLI) Machines(ctx context.Context) ([]Machine, error) {
+	list, err := c.machineList(ctx)
+	if err != nil {
 		return nil, err
 	}
+	machines := make([]Machine, 0, len(list))
+	for _, summary := range list {
+		m, err := c.inspectMachine(ctx, summary)
+		if err != nil {
+			return nil, err
+		}
+		machines = append(machines, m)
+	}
+	return machines, nil
+}
+
+func (c CLI) machineList(ctx context.Context) ([]machineSummaryJSON, error) {
+	var list []machineSummaryJSON
+	err := c.json(ctx, &list, "machine", "list", "--format", "json")
+	return list, err
+}
+
+// inspectMachine adds the details `machine inspect` has to a list entry;
+// it takes one machine at a time.
+func (c CLI) inspectMachine(ctx context.Context, summary machineSummaryJSON) (Machine, error) {
+	var inspected []machineJSON
+	if err := c.json(ctx, &inspected, "machine", "inspect", summary.ID); err != nil {
+		return Machine{}, err
+	}
 	if len(inspected) != 1 {
-		return nil, fmt.Errorf("inspecting machine %s: got %d results", name, len(inspected))
+		return Machine{}, fmt.Errorf("inspecting machine %s: got %d results", summary.ID, len(inspected))
 	}
 	j := inspected[0]
-	return &Machine{
+	return Machine{
 		Name:        j.ID,
 		Image:       j.Image.Reference,
 		Digest:      j.Image.Descriptor.Digest,
@@ -168,7 +198,7 @@ func (c CLI) Machine(ctx context.Context, name string) (*Machine, error) {
 		CPUs:        j.CPUs,
 		MemoryBytes: j.Memory,
 		HomeMount:   j.HomeMount,
-		Default:     list[i].Default,
+		Default:     summary.Default,
 		Status:      j.Status,
 		IPAddress:   j.IPAddress,
 		DiskSize:    j.DiskSize,

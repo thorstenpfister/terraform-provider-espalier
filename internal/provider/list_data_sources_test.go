@@ -1,6 +1,8 @@
 package provider
 
 import (
+	"fmt"
+	"regexp"
 	"testing"
 
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
@@ -57,6 +59,14 @@ data "espalier_networks" "none" {
 }
 
 data "espalier_images" "all" {}
+
+data "espalier_network" "a" {
+  name = "espalier-test-list-a"
+}
+
+data "espalier_volume" "test" {
+  name = "espalier-test-list"
+}
 `
 
 func TestAccListDataSources(t *testing.T) {
@@ -72,6 +82,9 @@ func TestAccListDataSources(t *testing.T) {
 			{
 				Config: listDataConfig,
 				ConfigStateChecks: []statecheck.StateCheck{
+					statecheck.ExpectKnownValue("data.espalier_network.a", tfjsonpath.New("labels"),
+						knownvalue.MapExact(map[string]knownvalue.Check{"espalier.test/list": knownvalue.StringExact("yes")})),
+					statecheck.ExpectKnownValue("data.espalier_volume.test", tfjsonpath.New("size_bytes"), knownvalue.Int64Exact(64<<20)),
 					// Only the labelled ones, ordered by name.
 					statecheck.ExpectKnownValue("data.espalier_networks.test", tfjsonpath.New("networks"),
 						knownvalue.ListExact([]knownvalue.Check{name("espalier-test-list-a"), name("espalier-test-list-b")})),
@@ -93,4 +106,15 @@ func TestAccListDataSources(t *testing.T) {
 			},
 		},
 	})
+}
+
+func TestAccObjectDataSourcesMissing(t *testing.T) {
+	var steps []resource.TestStep
+	for _, kind := range []string{"network", "volume", "machine"} {
+		steps = append(steps, resource.TestStep{
+			Config:      fmt.Sprintf(`data "espalier_%s" "test" { name = "espalier-test-missing" }`, kind),
+			ExpectError: regexp.MustCompile(kind + ` espalier-test-missing does not exist`),
+		})
+	}
+	resource.Test(t, resource.TestCase{ProtoV6ProviderFactories: testAccProviders, Steps: steps})
 }

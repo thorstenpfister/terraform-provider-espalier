@@ -397,28 +397,8 @@ func (r *machineResource) read(ctx context.Context, name string, prior machineMo
 		missing()
 		return
 	}
-	v := machineModel{
-		ID:             types.StringValue(m.Name),
-		Name:           types.StringValue(m.Name),
-		Image:          types.StringValue(m.Image),
-		Platform:       types.StringValue(m.Platform),
-		User:           types.StringValue(m.User),
-		UID:            types.Int64Value(m.UID),
-		GID:            types.Int64Value(m.GID),
-		Home:           types.StringValue(m.Home),
-		Scheme:         prior.Scheme,
-		Default:        types.BoolValue(m.Default),
-		CPUs:           types.Int64Value(m.CPUs),
-		Memory:         types.StringValue(formatSize(m.MemoryBytes)),
-		HomeMount:      types.StringValue(m.HomeMount),
-		Virtualization: prior.Virtualization,
-		Kernel:         prior.Kernel,
-		Running:        types.BoolValue(m.Status == "running"),
-		Status:         types.StringValue(m.Status),
-		IPAddress:      nullIfEmpty(m.IPAddress),
-		Digest:         types.StringValue(m.Digest),
-		DiskSize:       types.Int64Value(m.DiskSize),
-	}
+	v := machineValue(m)
+	v.Scheme, v.Virtualization, v.Kernel = prior.Scheme, prior.Virtualization, prior.Kernel
 	if !prior.Image.IsNull() && !prior.Image.IsUnknown() {
 		resolved, err := r.client.ImageName(ctx, prior.Image.ValueString())
 		if err != nil {
@@ -436,4 +416,31 @@ func (r *machineResource) read(ctx context.Context, name string, prior machineMo
 		v.Memory = prior.Memory
 	}
 	diags.Append(st.Set(ctx, &v)...)
+}
+
+// machineValue is the machine as the runtime reports it; scheme,
+// virtualization and kernel are not reported and stay null.
+func machineValue(m *client.Machine) machineModel {
+	return machineModel{
+		ID:             types.StringValue(m.Name),
+		Name:           types.StringValue(m.Name),
+		Image:          types.StringValue(m.Image),
+		Platform:       types.StringValue(m.Platform),
+		User:           types.StringValue(m.User),
+		UID:            types.Int64Value(m.UID),
+		GID:            types.Int64Value(m.GID),
+		Home:           types.StringValue(m.Home),
+		Scheme:         types.StringNull(),
+		Default:        types.BoolValue(m.Default),
+		CPUs:           types.Int64Value(m.CPUs),
+		Memory:         types.StringValue(formatSize(m.MemoryBytes)),
+		HomeMount:      types.StringValue(m.HomeMount),
+		Virtualization: types.BoolNull(),
+		Kernel:         types.StringNull(),
+		Running:        types.BoolValue(m.Status == "running"),
+		Status:         types.StringValue(m.Status),
+		IPAddress:      nullIfEmpty(m.IPAddress),
+		Digest:         types.StringValue(m.Digest),
+		DiskSize:       types.Int64Value(m.DiskSize),
+	}
 }
