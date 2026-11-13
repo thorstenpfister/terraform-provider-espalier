@@ -3,6 +3,7 @@ package provider
 import (
 	"context"
 	"fmt"
+	"maps"
 	"regexp"
 	"strconv"
 
@@ -39,6 +40,11 @@ type containerModel struct {
 	CPUs      types.Int64  `tfsdk:"cpus"`
 	Memory    types.String `tfsdk:"memory"`
 	Labels    types.Map    `tfsdk:"labels"`
+	Networks  types.List   `tfsdk:"networks"`
+	Mounts    types.List   `tfsdk:"mounts"`
+	Ports     types.List   `tfsdk:"ports"`
+	CapAdd    types.Set    `tfsdk:"cap_add"`
+	CapDrop   types.Set    `tfsdk:"cap_drop"`
 	Running   types.Bool   `tfsdk:"running"`
 	State     types.String `tfsdk:"state"`
 	Addresses types.List   `tfsdk:"addresses"`
@@ -63,9 +69,10 @@ var addressType = types.ObjectType{AttrTypes: map[string]attr.Type{
 var sizePattern = regexp.MustCompile(`^([0-9]+)([KMGTP]?)$`)
 
 var (
-	_ resource.ResourceWithConfigure   = &containerResource{}
-	_ resource.ResourceWithImportState = &containerResource{}
-	_ resource.ResourceWithModifyPlan  = &containerResource{}
+	_ resource.ResourceWithConfigure      = &containerResource{}
+	_ resource.ResourceWithImportState    = &containerResource{}
+	_ resource.ResourceWithModifyPlan     = &containerResource{}
+	_ resource.ResourceWithValidateConfig = &containerResource{}
 )
 
 // NewContainerResource returns the espalier_container resource.
@@ -171,6 +178,13 @@ func (r *containerResource) Schema(_ context.Context, _ resource.SchemaRequest, 
 			},
 		},
 	}
+	maps.Copy(resp.Schema.Attributes, attachmentAttributes())
+}
+
+func (r *containerResource) ValidateConfig(ctx context.Context, req resource.ValidateConfigRequest, resp *resource.ValidateConfigResponse) {
+	var mounts types.List
+	resp.Diagnostics.Append(req.Config.GetAttribute(ctx, path.Root("mounts"), &mounts)...)
+	validateMounts(ctx, mounts, &resp.Diagnostics)
 }
 
 func (r *containerResource) Configure(_ context.Context, req resource.ConfigureRequest, resp *resource.ConfigureResponse) {
@@ -195,6 +209,7 @@ func (r *containerResource) Create(ctx context.Context, req resource.CreateReque
 	}
 	resp.Diagnostics.Append(plan.Env.ElementsAs(ctx, &spec.Env, false)...)
 	resp.Diagnostics.Append(plan.Labels.ElementsAs(ctx, &spec.Labels, false)...)
+	attachmentsSpec(ctx, plan, &spec, &resp.Diagnostics)
 	if resp.Diagnostics.HasError() {
 		return
 	}
@@ -287,18 +302,9 @@ func (r *containerResource) read(ctx context.Context, name string, prior contain
 		missing()
 		return
 	}
-	m := containerModel{
-		ID:      types.StringValue(c.Name),
-		Name:    types.StringValue(c.Name),
-		Image:   types.StringValue(c.Image),
-		Workdir: types.StringValue(c.Workdir),
-		CPUs:    types.Int64Value(c.CPUs),
-		Memory:  types.StringValue(formatSize(c.MemoryBytes)),
-		Env:     labelsValue(ctx, c.Env, prior.Env, diags),
-		Labels:  labelsValue(ctx, c.Labels, prior.Labels, diags),
-		Running: types.BoolValue(c.State == "running"),
-		State:   types.StringValue(c.State),
-	}
+	m := containerValue(ctx, c, diags)
+	m.Env = labelsValue(ctx, c.Env, prior.Env, diags)
+	m.Labels = labelsValue(ctx, c.Labels, prior.Labels, diags)
 	if !prior.Image.IsNull() && !prior.Image.IsUnknown() {
 		resolved, err := r.client.ImageName(ctx, prior.Image.ValueString())
 		if err != nil {
@@ -312,9 +318,29 @@ func (r *containerResource) read(ctx context.Context, name string, prior contain
 	if b, ok := parseSize(prior.Memory.ValueString()); ok && b == c.MemoryBytes {
 		m.Memory = prior.Memory
 	}
-	command, d := types.ListValueFrom(ctx, types.StringType, c.Command)
+	diags.Append(st.Set(ctx, &m)...)
+}
+
+// containerValue is the container as the runtime reports it: the image
+// fully qualified, memory in the largest whole unit, empty maps and
+// collections null.
+func containerValue(ctx context.Context, c *client.Container, diags *diag.Diagnostics) containerModel {
+	m := containerModel{
+		ID:      types.StringValue(c.Name),
+		Name:    types.StringValue(c.Name),
+		Image:   types.StringValue(c.Image),
+		Workdir: types.StringValue(c.Workdir),
+		CPUs:    types.Int64Value(c.CPUs),
+		Memory:  types.StringValue(formatSize(c.MemoryBytes)),
+		Env:     labelsValue(ctx, c.Env, types.MapNull(types.StringType), diags),
+		Labels:  labelsValue(ctx, c.Labels, types.MapNull(types.StringType), diags),
+		Running: types.BoolValue(c.State == "running"),
+		State:   types.StringValue(c.State),
+	}
+	readAttachments(ctx, c, &m, diags)
+	var d diag.Diagnostics
+	m.Command, d = types.ListValueFrom(ctx, types.StringType, c.Command)
 	diags.Append(d...)
-	m.Command = command
 	addresses := make([]addressModel, 0, len(c.Addresses))
 	for _, a := range c.Addresses {
 		addresses = append(addresses, addressModel{
@@ -327,7 +353,7 @@ func (r *containerResource) read(ctx context.Context, name string, prior contain
 	}
 	m.Addresses, d = types.ListValueFrom(ctx, addressType, addresses)
 	diags.Append(d...)
-	diags.Append(st.Set(ctx, &m)...)
+	return m
 }
 
 // parseSize reads a size like the runtime does: bytes with an optional
@@ -392,11 +418,29 @@ func (r *containerResource) ModifyPlan(ctx context.Context, req resource.ModifyP
 			resp.RequiresReplace = append(resp.RequiresReplace, path.Root("image"))
 		}
 	}
+	replaceChangedAttachments(plan, state, resp)
 	if !plan.Memory.Equal(state.Memory) {
 		a, okA := parseSize(state.Memory.ValueString())
 		b, okB := parseSize(plan.Memory.ValueString())
 		if !okA || !okB || a != b {
 			resp.RequiresReplace = append(resp.RequiresReplace, path.Root("memory"))
 		}
+	}
+	if len(resp.RequiresReplace) == 0 {
+		keepObserved(ctx, plan, state, req.State, resp)
+	}
+
+}
+
+// keepObserved keeps state and addresses as known when nothing changes.
+// Terraform proposes null for unset nested attributes such as networks,
+// which the framework takes for a change and so marks all computed values
+// unknown; UseStateForUnknown restores networks, this restores the rest.
+func keepObserved(ctx context.Context, plan, state containerModel, prior tfsdk.State, resp *resource.ModifyPlanResponse) {
+	plan.State, plan.Addresses = state.State, state.Addresses
+	unchanged := resp.Plan
+	resp.Diagnostics.Append(unchanged.Set(ctx, &plan)...)
+	if unchanged.Raw.Equal(prior.Raw) {
+		resp.Plan = unchanged
 	}
 }

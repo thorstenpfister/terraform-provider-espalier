@@ -13,22 +13,44 @@ A container of the container runtime (`container create`), each a lightweight VM
 ## Example Usage
 
 ```terraform
-resource "espalier_image" "busybox" {
-  name = "busybox:1.37"
+resource "espalier_image" "nginx" {
+  name = "nginx:1.29-alpine"
 }
 
-resource "espalier_container" "sleeper" {
-  name    = "sleeper"
-  image   = espalier_image.busybox.name
-  command = ["sleep", "infinity"]
-  env     = { TZ = "Europe/Berlin" }
-  cpus    = 1
-  memory  = "256M"
-  labels  = { owner = "terraform" }
+resource "espalier_network" "apps" {
+  name   = "apps"
+  subnet = "192.168.100.0/24"
 }
 
-output "sleeper_ipv4" {
-  value = espalier_container.sleeper.addresses[0].ipv4_address
+resource "espalier_volume" "cache" {
+  name = "nginx-cache"
+  size = "1G"
+}
+
+resource "espalier_container" "web" {
+  name   = "web"
+  image  = espalier_image.nginx.name
+  cpus   = 1
+  memory = "256M"
+  env    = { NGINX_ENTRYPOINT_QUIET_LOGS = "1" }
+  labels = { owner = "terraform" }
+
+  networks = [
+    { network = espalier_network.apps.name, aliases = ["web.apps.test"] },
+  ]
+  mounts = [
+    { type = "bind", source = "/Users/me/site", target = "/usr/share/nginx/html", read_only = true },
+    { type = "volume", source = espalier_volume.cache.name, target = "/var/cache/nginx" },
+    { type = "tmpfs", target = "/tmp" },
+  ]
+  ports = [
+    { host_ip = "127.0.0.1", host_port = 8080, container_port = 80 },
+  ]
+  cap_drop = ["CAP_NET_RAW"]
+}
+
+output "web_ipv4" {
+  value = espalier_container.web.addresses[0].ipv4_address
 }
 ```
 
@@ -42,11 +64,16 @@ output "sleeper_ipv4" {
 
 ### Optional
 
+- `cap_add` (Set of String) Linux capabilities to add, e.g. `CAP_NET_ADMIN`, or `ALL`.
+- `cap_drop` (Set of String) Linux capabilities to drop, e.g. `CAP_MKNOD`, or `ALL`.
 - `command` (List of String) The process to run, as a full argument list (its first element replaces the image's entrypoint). Defaults to the image's entrypoint and command.
 - `cpus` (Number) Number of CPUs. Defaults to the runtime's `container.cpus` property.
 - `env` (Map of String) Environment variables, on top of the image's environment.
 - `labels` (Map of String) Labels attached to the container.
 - `memory` (String) Memory in bytes, with an optional `K`, `M`, `G`, `T` or `P` suffix, e.g. `512M`. Defaults to the runtime's `container.memory` property.
+- `mounts` (Attributes List) Filesystems to mount. (see [below for nested schema](#nestedatt--mounts))
+- `networks` (Attributes List) Networks to attach, in order; the first is the primary one. Defaults to the runtime's `default` network. (see [below for nested schema](#nestedatt--networks))
+- `ports` (Attributes List) Container ports to publish on the host. (see [below for nested schema](#nestedatt--ports))
 - `running` (Boolean) Whether the container should run. Changes start or stop it in place; a container stopped outside Terraform is started again. Defaults to `true`.
 - `workdir` (String) Working directory of the process. Defaults to the image's, else `/`.
 
@@ -55,6 +82,48 @@ output "sleeper_ipv4" {
 - `addresses` (Attributes List) Addresses of the running container, one per network. Empty while it is stopped; they may change when it restarts. (see [below for nested schema](#nestedatt--addresses))
 - `id` (String) The container's name.
 - `state` (String) State as the runtime reports it, e.g. `running` or `stopped`.
+
+<a id="nestedatt--mounts"></a>
+### Nested Schema for `mounts`
+
+Required:
+
+- `target` (String) Absolute path inside the container.
+- `type` (String) `bind` (a host directory), `volume` (an `espalier_volume`) or `tmpfs`.
+
+Optional:
+
+- `read_only` (Boolean) Mount read-only. Defaults to `false`.
+- `source` (String) Absolute host path for `bind`, volume name for `volume`; not set for `tmpfs`.
+
+
+<a id="nestedatt--networks"></a>
+### Nested Schema for `networks`
+
+Required:
+
+- `network` (String) Network name, e.g. an `espalier_network`'s `name`.
+
+Optional:
+
+- `aliases` (List of String) Additional DNS names of the container on this network. They must be fully qualified, e.g. `api.example.test`.
+- `mac_address` (String) MAC address, in lower case. Assigned when the container starts if not set; see `addresses` for the one in use.
+- `mtu` (Number) MTU of the interface. Defaults to the runtime's.
+
+
+<a id="nestedatt--ports"></a>
+### Nested Schema for `ports`
+
+Required:
+
+- `container_port` (Number) Container port.
+- `host_port` (Number) Host port.
+
+Optional:
+
+- `host_ip` (String) Host address to listen on. Defaults to `0.0.0.0`, all IPv4 addresses.
+- `protocol` (String) `tcp` or `udp`. Defaults to `tcp`.
+
 
 <a id="nestedatt--addresses"></a>
 ### Nested Schema for `addresses`

@@ -76,5 +76,6 @@ func (p *espalierProvider) DataSources(context.Context) []func() datasource.Data
 	return []func() datasource.DataSource{
 		NewSystemDataSource,
 		NewImageDataSource,
+		NewContainerDataSource,
 	}
 }

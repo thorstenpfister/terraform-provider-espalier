@@ -13,7 +13,7 @@ espalier is not affiliated with or endorsed by Apple Inc.
 
 ## Status
 
-Early development. Available today:
+Available today:
 
 | Kind | Name | What |
 |---|---|---|
@@ -22,10 +22,10 @@ Early development. Available today:
 | Resource | `espalier_volume` | Disk-image volume, optional size, labels; import by name |
 | Resource | `espalier_image` | Pulled image, optional platform, `keep_locally`; import by reference |
 | Data source | `espalier_image` | Image already in the runtime: digest, platforms |
-| Resource | `espalier_container` | Image, command, env, workdir, CPUs, memory, labels, running state, addresses; import by name |
+| Resource | `espalier_container` | Image, command, env, workdir, CPUs, memory, labels; networks (MAC, MTU, aliases), bind/volume/tmpfs mounts, published ports, capabilities; running state, addresses; import by name |
+| Data source | `espalier_container` | Existing container, as the resource describes it |
 
-Planned for v1: networks, mounts, published ports and capabilities on `espalier_container`, and the
-`espalier_container` data source.
+Early development: the scope planned for v1 is in place, but nothing is released yet.
 
 ## Requirements
 
