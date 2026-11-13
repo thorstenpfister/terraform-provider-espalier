@@ -42,7 +42,11 @@ output "dns_ipv4" {
 - `id` (String) The container's name.
 - `image` (String) Image reference, resolved like `espalier_image`'s `name`. The runtime pulls it if it is missing; use `espalier_image` to control pulling and pin versions.
 - `init` (Boolean) Run an init process that forwards signals and reaps zombies. Defaults to `false`.
+- `init_image` (String) Always null: the runtime does not report the init image.
+- `kernel` (String) Always null: the runtime does not report the kernel.
+- `kernel_args` (List of String) Always null: the runtime does not report the kernel arguments.
 - `labels` (Map of String) Labels attached to the container.
+- `masked_paths` (List of String) Paths in the container that are hidden, including the runtime's defaults; null while only the defaults apply.
 - `memory` (String) Memory in bytes, with an optional `K`, `M`, `G`, `T` or `P` suffix, e.g. `512M`. Defaults to the runtime's `container.memory` property.
 - `mounts` (Attributes List) Filesystems to mount. (see [below for nested schema](#nestedatt--mounts))
 - `networks` (Attributes List) Networks to attach, in order; the first is the primary one. Defaults to the runtime's `default` network. (see [below for nested schema](#nestedatt--networks))
@@ -51,14 +55,17 @@ output "dns_ipv4" {
 - `ports` (Attributes List) Container ports to publish on the host. (see [below for nested schema](#nestedatt--ports))
 - `publish_sockets` (Attributes List) Unix sockets in the container to publish on the host. (see [below for nested schema](#nestedatt--publish_sockets))
 - `read_only` (Boolean) Mount the root filesystem read-only. Defaults to `false`.
+- `read_only_paths` (List of String) Paths in the container that are read-only, including the runtime's defaults; null while only the defaults apply.
 - `rosetta` (Boolean) Enable Rosetta, to run x86-64 binaries. Defaults to `false`.
 - `running` (Boolean) Whether the container should run. Changes start or stop it in place; a container stopped outside Terraform is started again. Defaults to `true`.
-- `scheme` (String) Always null: the runtime does not record the registry scheme.
+- `runtime` (String) Runtime handler (plugin) that runs the container. Defaults to `container-runtime-linux`.
+- `scheme` (String) Always null: the runtime does not report the registry scheme.
 - `shm_size` (String) Size of `/dev/shm`, with an optional `K`, `M`, `G`, `T` or `P` suffix. Defaults to the runtime's.
 - `ssh` (Boolean) Forward the host's SSH agent socket into the container. Defaults to `false`.
 - `state` (String) State as the runtime reports it, e.g. `running` or `stopped`.
 - `ulimits` (Attributes List) Resource limits of the process. (see [below for nested schema](#nestedatt--ulimits))
 - `user` (String) User of the process, as `name`, `uid` or `uid:gid`. Defaults to the image's, else `0:0`.
+- `virtualization` (Boolean) Expose virtualization to the container, for nested VMs; needs host and kernel support. Defaults to `false`.
 - `workdir` (String) Working directory of the process. Defaults to the image's, else `/`.
 
 <a id="nestedatt--addresses"></a>

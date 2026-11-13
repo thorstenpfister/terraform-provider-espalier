@@ -94,7 +94,11 @@ resource "espalier_container" "worker" {
 - `dns` (Attributes) Resolver configuration. The runtime's defaults apply to whatever is not set. (see [below for nested schema](#nestedatt--dns))
 - `env` (Map of String) Environment variables, on top of the image's environment.
 - `init` (Boolean) Run an init process that forwards signals and reaps zombies. Defaults to `false`.
+- `init_image` (String) Image of the VM's init system, instead of the runtime's `vminit` image. Not reported, like `kernel`.
+- `kernel` (String) Absolute host path of a custom kernel for the container's VM. Defaults to the runtime's kernel (see `espalier_system`). The runtime does not report it, so a change outside Terraform is not noticed, and import does not recover it.
+- `kernel_args` (List of String) Arguments appended to the kernel command line, e.g. `["quiet"]`. Not reported, like `kernel`.
 - `labels` (Map of String) Labels attached to the container.
+- `masked_paths` (List of String) **Experimental in the runtime.** Absolute paths in the container to hide, in addition to the runtime's defaults (`/proc/kcore`, `/sys/firmware` and others). An element `NONE` drops the defaults and the paths before it, e.g. `["NONE"]` for none at all.
 - `memory` (String) Memory in bytes, with an optional `K`, `M`, `G`, `T` or `P` suffix, e.g. `512M`. Defaults to the runtime's `container.memory` property.
 - `mounts` (Attributes List) Filesystems to mount. (see [below for nested schema](#nestedatt--mounts))
 - `networks` (Attributes List) Networks to attach, in order; the first is the primary one. Defaults to the runtime's `default` network. (see [below for nested schema](#nestedatt--networks))
@@ -103,13 +107,16 @@ resource "espalier_container" "worker" {
 - `ports` (Attributes List) Container ports to publish on the host. (see [below for nested schema](#nestedatt--ports))
 - `publish_sockets` (Attributes List) Unix sockets in the container to publish on the host. (see [below for nested schema](#nestedatt--publish_sockets))
 - `read_only` (Boolean) Mount the root filesystem read-only. Defaults to `false`.
+- `read_only_paths` (List of String) **Experimental in the runtime.** Absolute paths in the container to mount read-only, in addition to the runtime's defaults (`/proc/sys`, `/proc/sysrq-trigger` and others). An element `NONE` drops the defaults and the paths before it, e.g. `["NONE"]` for none at all.
 - `rosetta` (Boolean) Enable Rosetta, to run x86-64 binaries. Defaults to `false`.
 - `running` (Boolean) Whether the container should run. Changes start or stop it in place; a container stopped outside Terraform is started again. Defaults to `true`.
+- `runtime` (String) Runtime handler (plugin) that runs the container. Defaults to `container-runtime-linux`.
 - `scheme` (String) Registry scheme, `http` or `https`, for pulling the image if it is missing, e.g. `http` for a local registry without TLS. Defaults to `https`. Only used when pulling: the runtime does not record it, and changing it does not replace the container.
 - `shm_size` (String) Size of `/dev/shm`, with an optional `K`, `M`, `G`, `T` or `P` suffix. Defaults to the runtime's.
 - `ssh` (Boolean) Forward the host's SSH agent socket into the container. Defaults to `false`.
 - `ulimits` (Attributes List) Resource limits of the process. (see [below for nested schema](#nestedatt--ulimits))
 - `user` (String) User of the process, as `name`, `uid` or `uid:gid`. Defaults to the image's, else `0:0`.
+- `virtualization` (Boolean) Expose virtualization to the container, for nested VMs; needs host and kernel support. Defaults to `false`.
 - `workdir` (String) Working directory of the process. Defaults to the image's, else `/`.
 
 ### Read-Only

@@ -8,6 +8,7 @@ import (
 	dschema "github.com/hashicorp/terraform-plugin-framework/datasource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	rschema "github.com/hashicorp/terraform-plugin-framework/resource/schema"
+	"github.com/hashicorp/terraform-plugin-framework/types"
 
 	"github.com/thorstenpfister/terraform-provider-espalier/internal/client"
 )
@@ -32,7 +33,16 @@ func (d *containerDataSource) Schema(ctx context.Context, _ datasource.SchemaReq
 	(&containerResource{}).Schema(ctx, resource.SchemaRequest{}, &rs)
 	attrs := computedAttributes(rs.Schema.Attributes)
 	attrs["name"] = dschema.StringAttribute{MarkdownDescription: "Name of the container.", Required: true}
-	attrs["scheme"] = dschema.StringAttribute{MarkdownDescription: "Always null: the runtime does not record the registry scheme.", Computed: true}
+	notReported := func(what string) string { return "Always null: the runtime does not report the " + what + "." }
+	attrs["scheme"] = dschema.StringAttribute{MarkdownDescription: notReported("registry scheme"), Computed: true}
+	attrs["kernel"] = dschema.StringAttribute{MarkdownDescription: notReported("kernel"), Computed: true}
+	attrs["kernel_args"] = dschema.ListAttribute{MarkdownDescription: notReported("kernel arguments"), ElementType: types.StringType, Computed: true}
+	attrs["init_image"] = dschema.StringAttribute{MarkdownDescription: notReported("init image"), Computed: true}
+	effective := func(what string) string {
+		return "Paths in the container that are " + what + ", including the runtime's defaults; null while only the defaults apply."
+	}
+	attrs["read_only_paths"] = dschema.ListAttribute{MarkdownDescription: effective("read-only"), ElementType: types.StringType, Computed: true}
+	attrs["masked_paths"] = dschema.ListAttribute{MarkdownDescription: effective("hidden"), ElementType: types.StringType, Computed: true}
 	resp.Schema = dschema.Schema{
 		MarkdownDescription: "A container of the container runtime, e.g. one created outside Terraform. Fails if it " +
 			"does not exist. `image` is fully qualified and `memory` in the largest whole unit.",

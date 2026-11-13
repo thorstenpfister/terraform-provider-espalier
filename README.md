@@ -24,12 +24,10 @@ Available today:
 | Data source | `espalier_image` | Image already in the runtime: digest, platforms |
 | Resource | `espalier_image_build` | Image built from a Dockerfile: tags, build args, target, platforms, labels, secrets from host env/files, SSH agent; rebuilt in place on context changes (hashed, honouring `.dockerignore`), `triggers` or tag drift; the builder is stopped afterwards unless the provider's `builder.keep_running` is set |
 | Resource | `espalier_image_tag` | Another name for a local image, re-tagged if it drifts from its source; import by `source,target` |
-| Resource | `espalier_container` | Image, command, env, workdir, CPUs, memory, labels; networks (MAC, MTU, aliases), bind/volume/tmpfs mounts, published ports, capabilities; platform, user, read-only root, DNS, init, Rosetta, SSH agent, `/dev/shm`, ulimits, published sockets, `http` registries; running state, addresses; import by name |
+| Resource | `espalier_container` | Image, command, env, workdir, CPUs, memory, labels; networks (MAC, MTU, aliases), bind/volume/tmpfs mounts, published ports, capabilities; platform, user, read-only root, DNS, init, Rosetta, SSH agent, `/dev/shm`, ulimits, published sockets, `http` registries; VM: custom kernel and arguments, init image, runtime handler, nested virtualization, read-only/masked paths (experimental); running state, addresses; import by name |
 | Data source | `espalier_container` | Existing container, as the resource describes it |
 | Resource | `espalier_machine` | Container machine (long-lived dev VM): image, platform, account, CPUs, memory, home mount, nested virtualization, kernel, default machine, running state; settings change in place; import by name |
 | Data sources | `espalier_networks`, `espalier_volumes`, `espalier_containers`, `espalier_images` | Everything of one kind, sorted by name; filter by labels (not images) |
-
-Planned before the first release: the remaining niche `container create` options.
 
 Blocked upstream: registry logins (`container registry login`). The runtime stores the
 credentials, but pulls then fail to read them from the Keychain (`status -25308`, see

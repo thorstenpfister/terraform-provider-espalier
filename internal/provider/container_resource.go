@@ -57,6 +57,13 @@ type containerModel struct {
 	Ulimits        types.List   `tfsdk:"ulimits"`
 	PublishSockets types.List   `tfsdk:"publish_sockets"`
 	Scheme         types.String `tfsdk:"scheme"`
+	Kernel         types.String `tfsdk:"kernel"`
+	KernelArgs     types.List   `tfsdk:"kernel_args"`
+	InitImage      types.String `tfsdk:"init_image"`
+	Runtime        types.String `tfsdk:"runtime"`
+	Virtualization types.Bool   `tfsdk:"virtualization"`
+	ReadOnlyPaths  types.List   `tfsdk:"read_only_paths"`
+	MaskedPaths    types.List   `tfsdk:"masked_paths"`
 	Running        types.Bool   `tfsdk:"running"`
 	State          types.String `tfsdk:"state"`
 	Addresses      types.List   `tfsdk:"addresses"`

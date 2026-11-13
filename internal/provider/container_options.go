@@ -14,6 +14,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/booldefault"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/boolplanmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/listplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
@@ -25,8 +26,9 @@ import (
 
 // The less common options of espalier_container: platform, user, root
 // filesystem, DNS, init, Rosetta, SSH agent, /dev/shm, ulimits, published
-// sockets, and the registry scheme. All but scheme replace the container
-// when they change.
+// sockets, the registry scheme, and the VM: kernel, init image, runtime
+// handler, virtualization and the protected paths. All but scheme replace
+// the container when they change.
 
 type dnsModel struct {
 	Nameservers types.List   `tfsdk:"nameservers"`
@@ -59,6 +61,8 @@ var (
 	}}
 
 	absolutePath = stringvalidator.RegexMatches(regexp.MustCompile(`^/`), "must be an absolute path")
+	// A protected path list may start over from nothing with NONE.
+	protectedPath = stringvalidator.RegexMatches(regexp.MustCompile(`^(/|NONE$)`), "must be an absolute path or NONE")
 )
 
 func optionAttributes() map[string]schema.Attribute {
@@ -72,6 +76,19 @@ func optionAttributes() map[string]schema.Attribute {
 		}
 	}
 	nonEmpty := []validator.List{listvalidator.SizeAtLeast(1)}
+	replaceString := []planmodifier.String{stringplanmodifier.RequiresReplace()}
+	replaceList := []planmodifier.List{listplanmodifier.RequiresReplace()}
+	protectedPaths := func(what, defaults string) schema.ListAttribute {
+		return schema.ListAttribute{
+			MarkdownDescription: "**Experimental in the runtime.** Absolute paths in the container to " + what + ", in " +
+				"addition to the runtime's defaults (" + defaults + "). An element `NONE` drops the defaults and the paths " +
+				"before it, e.g. `[\"NONE\"]` for none at all.",
+			ElementType:   types.StringType,
+			Optional:      true,
+			PlanModifiers: replaceList,
+			Validators:    []validator.List{listvalidator.SizeAtLeast(1), listvalidator.ValueStringsAre(protectedPath)},
+		}
+	}
 	return map[string]schema.Attribute{
 		"platform": schema.StringAttribute{
 			MarkdownDescription: "Platform of a multi-platform image (`os/arch[/variant]`, e.g. `linux/amd64`, which runs " +
@@ -138,6 +155,37 @@ func optionAttributes() map[string]schema.Attribute {
 				"container_path": schema.StringAttribute{MarkdownDescription: "Absolute path of the socket in the container.", Required: true, Validators: []validator.String{absolutePath}},
 			}},
 		},
+		"kernel": schema.StringAttribute{
+			MarkdownDescription: "Absolute host path of a custom kernel for the container's VM. Defaults to the " +
+				"runtime's kernel (see `espalier_system`). The runtime does not report it, so a change outside Terraform " +
+				"is not noticed, and import does not recover it.",
+			Optional:      true,
+			PlanModifiers: replaceString,
+			Validators:    []validator.String{absolutePath},
+		},
+		"kernel_args": schema.ListAttribute{
+			MarkdownDescription: "Arguments appended to the kernel command line, e.g. `[\"quiet\"]`. Not reported, like `kernel`.",
+			ElementType:         types.StringType,
+			Optional:            true,
+			PlanModifiers:       replaceList,
+			Validators:          nonEmpty,
+		},
+		"init_image": schema.StringAttribute{
+			MarkdownDescription: "Image of the VM's init system, instead of the runtime's `vminit` image. Not reported, like `kernel`.",
+			Optional:            true,
+			PlanModifiers:       replaceString,
+		},
+		"runtime": schema.StringAttribute{
+			MarkdownDescription: "Runtime handler (plugin) that runs the container. Defaults to `container-runtime-linux`.",
+			Optional:            true,
+			Computed:            true,
+			PlanModifiers: []planmodifier.String{
+				stringplanmodifier.RequiresReplaceIfConfigured(), stringplanmodifier.UseStateForUnknown(),
+			},
+		},
+		"virtualization":  off("Expose virtualization to the container, for nested VMs; needs host and kernel support."),
+		"read_only_paths": protectedPaths("mount read-only", "`/proc/sys`, `/proc/sysrq-trigger` and others"),
+		"masked_paths":    protectedPaths("hide", "`/proc/kcore`, `/sys/firmware` and others"),
 		"scheme": schema.StringAttribute{
 			MarkdownDescription: "Registry scheme, `http` or `https`, for pulling the image if it is missing, e.g. " +
 				"`http` for a local registry without TLS. Defaults to `https`. Only used when pulling: the runtime does " +
@@ -172,6 +220,11 @@ func optionsSpec(ctx context.Context, plan containerModel, spec *client.Containe
 		plan.ReadOnly.ValueBool(), plan.Init.ValueBool(), plan.Rosetta.ValueBool(), plan.SSH.ValueBool(), plan.NoDNS.ValueBool()
 	spec.ShmSize = plan.ShmSize.ValueString()
 	spec.Scheme = plan.Scheme.ValueString()
+	spec.Kernel, spec.InitImage, spec.Runtime = plan.Kernel.ValueString(), plan.InitImage.ValueString(), plan.Runtime.ValueString()
+	spec.Virtualization = plan.Virtualization.ValueBool()
+	diags.Append(plan.KernelArgs.ElementsAs(ctx, &spec.KernelArgs, false)...)
+	diags.Append(plan.ReadOnlyPaths.ElementsAs(ctx, &spec.ReadOnlyPaths, false)...)
+	diags.Append(plan.MaskedPaths.ElementsAs(ctx, &spec.MaskedPaths, false)...)
 	if !plan.DNS.IsNull() {
 		var d dnsModel
 		diags.Append(plan.DNS.As(ctx, &d, basetypes.ObjectAsOptions{})...)
@@ -193,7 +246,8 @@ func optionsSpec(ctx context.Context, plan containerModel, spec *client.Containe
 }
 
 // readOptions stores the container's options in m, as the runtime reports
-// them. Empty collections are null.
+// them. Empty collections are null, but for the protected paths, where
+// empty means none and null the defaults.
 func readOptions(ctx context.Context, c *client.Container, m *containerModel, diags *diag.Diagnostics) {
 	var d diag.Diagnostics
 	m.Platform = types.StringValue(c.Platform)
@@ -205,6 +259,12 @@ func readOptions(ctx context.Context, c *client.Container, m *containerModel, di
 		m.ShmSize = types.StringValue(formatSize(c.ShmSizeBytes))
 	}
 	m.Scheme = types.StringNull()
+	m.Kernel, m.KernelArgs, m.InitImage = types.StringNull(), types.ListNull(types.StringType), types.StringNull()
+	m.Runtime, m.Virtualization = types.StringValue(c.Runtime), types.BoolValue(c.Virtualization)
+	m.ReadOnlyPaths, d = pathList(ctx, c.ReadOnlyPaths)
+	diags.Append(d...)
+	m.MaskedPaths, d = pathList(ctx, c.MaskedPaths)
+	diags.Append(d...)
 
 	m.DNS = types.ObjectNull(dnsType.AttrTypes)
 	if dns := c.DNS; len(dns.Nameservers)+len(dns.Search)+len(dns.Options) > 0 || dns.Domain != "" {
@@ -239,8 +299,11 @@ func readOptions(ctx context.Context, c *client.Container, m *containerModel, di
 }
 
 // keepWrittenOptions keeps values from prior (plan or state) that the
-// runtime reports differently but that mean the same.
+// runtime reports differently but that mean the same, or not at all. The
+// protected paths are reported with the defaults they were added to.
 func keepWrittenOptions(prior containerModel, m *containerModel) {
+	m.Kernel, m.KernelArgs, m.InitImage = prior.Kernel, prior.KernelArgs, prior.InitImage
+	m.ReadOnlyPaths, m.MaskedPaths = prior.ReadOnlyPaths, prior.MaskedPaths
 	if samePlatform(prior.Platform.ValueString(), m.Platform.ValueString()) {
 		m.Platform = prior.Platform
 	}
@@ -292,6 +355,13 @@ func sameSize(a, b string) bool {
 	sa, okA := parseSize(a)
 	sb, okB := parseSize(b)
 	return okA && okB && sa == sb
+}
+
+func pathList(ctx context.Context, paths []string) (types.List, diag.Diagnostics) {
+	if paths == nil {
+		return types.ListNull(types.StringType), nil
+	}
+	return types.ListValueFrom(ctx, types.StringType, paths)
 }
 
 func stringList(ctx context.Context, values []string, diags *diag.Diagnostics) types.List {

@@ -1,15 +1,23 @@
 package provider
 
 import (
+	"context"
 	"fmt"
+	"os"
+	"path/filepath"
 	"regexp"
+	"slices"
+	"strings"
 	"testing"
 
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
 	"github.com/hashicorp/terraform-plugin-testing/knownvalue"
 	"github.com/hashicorp/terraform-plugin-testing/plancheck"
 	"github.com/hashicorp/terraform-plugin-testing/statecheck"
+	"github.com/hashicorp/terraform-plugin-testing/terraform"
 	"github.com/hashicorp/terraform-plugin-testing/tfjsonpath"
+
+	"github.com/thorstenpfister/terraform-provider-espalier/internal/client"
 )
 
 func optionsConfig(dir, platform, shm string) string {
@@ -116,6 +124,112 @@ resource "espalier_container" "test" {
 	})
 }
 
+func vmConfig(kernel, initImage, kernelArg string) string {
+	return fmt.Sprintf(`
+resource "espalier_container" "test" {
+  name            = "espalier-test-vm"
+  image           = "busybox:1.37"
+  command         = ["sleep", "3600"]
+  kernel          = %q
+  kernel_args     = [%q]
+  init_image      = %q
+  runtime         = "container-runtime-linux"
+  virtualization  = true
+  read_only_paths = ["/opt"]
+  masked_paths    = ["NONE", "/srv"]
+}
+
+data "espalier_container" "test" {
+  name = espalier_container.test.name
+}`, kernel, kernelArg, initImage)
+}
+
+// TestAccContainerVM runs a container with the runtime's own kernel and
+// init image, named explicitly.
+func TestAccContainerVM(t *testing.T) {
+	addr, data := "espalier_container.test", "data.espalier_container.test"
+	kernel, initImage := runtimeKernelAndInit(t)
+	resource.Test(t, resource.TestCase{
+		ProtoV6ProviderFactories: testAccProviders,
+		CheckDestroy:             checkContainersGone("espalier-test-vm"),
+		Steps: []resource.TestStep{
+			{
+				Config: vmConfig(kernel, initImage, "quiet"),
+				Check:  checkKernelArg("espalier-test-vm", "quiet"),
+				ConfigStateChecks: []statecheck.StateCheck{
+					statecheck.ExpectKnownValue(addr, tfjsonpath.New("state"), knownvalue.StringExact("running")),
+					statecheck.ExpectKnownValue(addr, tfjsonpath.New("kernel"), knownvalue.StringExact(kernel)),
+					statecheck.ExpectKnownValue(addr, tfjsonpath.New("masked_paths"), knownvalue.ListExact([]knownvalue.Check{
+						knownvalue.StringExact("NONE"), knownvalue.StringExact("/srv"),
+					})),
+					// As the runtime reports them: with the defaults, or without after NONE.
+					statecheck.ExpectKnownValue(data, tfjsonpath.New("virtualization"), knownvalue.Bool(true)),
+					statecheck.ExpectKnownValue(data, tfjsonpath.New("runtime"), knownvalue.StringExact("container-runtime-linux")),
+					statecheck.ExpectKnownValue(data, tfjsonpath.New("read_only_paths"), knownvalue.ListPartial(map[int]knownvalue.Check{
+						0: knownvalue.StringExact("/proc/bus"),
+					})),
+					statecheck.ExpectKnownValue(data, tfjsonpath.New("masked_paths"), knownvalue.ListExact([]knownvalue.Check{
+						knownvalue.StringExact("/srv"),
+					})),
+					statecheck.ExpectKnownValue(data, tfjsonpath.New("kernel"), knownvalue.Null()),
+				},
+			},
+			{
+				ResourceName:      addr,
+				ImportState:       true,
+				ImportStateVerify: true,
+				// Not reported, or reported with the defaults.
+				ImportStateVerifyIgnore: []string{"image", "kernel", "kernel_args", "init_image", "read_only_paths", "masked_paths"},
+			},
+			{
+				Config: vmConfig(kernel, initImage, "loglevel=3"),
+				Check:  checkKernelArg("espalier-test-vm", "loglevel=3"),
+				ConfigPlanChecks: resource.ConfigPlanChecks{PreApply: []plancheck.PlanCheck{
+					plancheck.ExpectResourceAction(addr, plancheck.ResourceActionDestroyBeforeCreate),
+				}},
+			},
+		},
+	})
+}
+
+// runtimeKernelAndInit returns the path of the runtime's default kernel and
+// a local vminit image.
+func runtimeKernelAndInit(t *testing.T) (string, string) {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		t.Fatal(err)
+	}
+	kernel, err := filepath.EvalSymlinks(filepath.Join(home, "Library/Application Support/com.apple.container/kernels/default.kernel-arm64"))
+	if err != nil {
+		t.Skipf("no default kernel: %v", err)
+	}
+	images, err := testClient.Images(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	i := slices.IndexFunc(images, func(img client.Image) bool {
+		return strings.HasPrefix(img.Name, "ghcr.io/apple/containerization/vminit:")
+	})
+	if i < 0 {
+		t.Skip("no local vminit image")
+	}
+	return kernel, images[i].Name
+}
+
+// checkKernelArg checks the container's kernel command line.
+func checkKernelArg(name, arg string) resource.TestCheckFunc {
+	return func(*terraform.State) error {
+		out, err := testClient.(client.CLI).Run(context.Background(), "exec", name, "cat", "/proc/cmdline")
+		if err != nil {
+			return err
+		}
+		if !slices.Contains(strings.Fields(string(out)), arg) {
+			return fmt.Errorf("kernel command line %q lacks %q", out, arg)
+		}
+		return nil
+	}
+}
+
 func TestAccContainerOptionsInvalid(t *testing.T) {
 	var steps []resource.TestStep
 	for extra, msg := range map[string]string{
@@ -124,8 +238,11 @@ func TestAccContainerOptionsInvalid(t *testing.T) {
 		`ulimits = [{ name = "nofile", soft = 2, hard = 1 }]`:                          "exceeds its hard",
 		`ulimits = [{ name = "RLIMIT_NOFILE", soft = 1, hard = 1 }]`:                   "limit name in lower",
 		`publish_sockets = [{ host_path = "s.sock", container_path = "/run/s.sock" }]`: "absolute path",
-		`scheme = "ftp"`:    "value must be one of",
-		`shm_size = "64MB"`: "number of bytes",
+		`scheme = "ftp"`:                     "value must be one of",
+		`shm_size = "64MB"`:                  "number of bytes",
+		`kernel = "vmlinux"`:                 "absolute path",
+		`masked_paths = ["proc/kcore"]`:      "absolute path or NONE",
+		`read_only_paths = ["/opt", "none"]`: "absolute path or NONE",
 	} {
 		steps = append(steps, resource.TestStep{
 			Config: fmt.Sprintf(`

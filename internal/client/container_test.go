@@ -27,7 +27,9 @@ const containersJSON = `[{"id":"probe","configuration":{
 "resources":{"cpuOverhead":1,"cpus":2,"memoryInBytes":268435456},
 "dns":{"domain":"espalier.test","nameservers":["1.1.1.1"],"options":["ndots:2"],"searchDomains":["a.test"]},
 "readOnly":true,"useInit":true,"rosetta":true,"ssh":true,"shmSize":134217728,
-"publishedSockets":[{"containerPath":"/run/s.sock","hostPath":"/host/s.sock"}]},
+"publishedSockets":[{"containerPath":"/run/s.sock","hostPath":"/host/s.sock"}],
+"runtimeHandler":"container-runtime-linux","virtualization":true,
+"readonlyPaths":["/proc/bus","/opt"],"maskedPaths":[]},
 "status":{"state":"running","networks":[
  {"network":"net","ipv4Address":"192.168.232.2/24","ipv4Gateway":"192.168.232.1","ipv6Address":"fd6a::2/64","macAddress":"02:42:ac:11:00:02"},
  {"network":"default","ipv4Address":"192.168.64.2/24","ipv4Gateway":"192.168.64.1","ipv6Address":"fd55::2/64","macAddress":"f2:9f:c7:e6:b6:97"}]}}]`
@@ -76,6 +78,10 @@ func TestContainer(t *testing.T) {
 			SSH:            true,
 			Ulimits:        []Ulimit{{Name: "nofile", Soft: 1024, Hard: 2048}},
 			PublishSockets: []Socket{{HostPath: "/host/s.sock", ContainerPath: "/run/s.sock"}},
+			Runtime:        "container-runtime-linux",
+			Virtualization: true,
+			ReadOnlyPaths:  []string{"/proc/bus", "/opt"},
+			MaskedPaths:    []string{}, // NONE: no defaults either
 		},
 		MemoryBytes:  256 << 20,
 		ShmSizeBytes: 128 << 20,
@@ -123,6 +129,13 @@ func TestCreateContainerArgs(t *testing.T) {
 		NoDNS:          true,
 		Ulimits:        []Ulimit{{Name: "nofile", Soft: 1024, Hard: 2048}},
 		PublishSockets: []Socket{{HostPath: "/host/s.sock", ContainerPath: "/run/s.sock"}},
+		Kernel:         "/k/vmlinux",
+		KernelArgs:     []string{"quiet", "loglevel=3"},
+		InitImage:      "vminit:1",
+		Runtime:        "container-runtime-linux",
+		Virtualization: true,
+		ReadOnlyPaths:  []string{"/opt"},
+		MaskedPaths:    []string{"NONE", "/secret"},
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -132,8 +145,10 @@ func TestCreateContainerArgs(t *testing.T) {
 		" --mount type=volume,target=/data,source=v --mount type=bind,target=/bind,source=/host/dir,readonly --mount type=tmpfs,target=/scratch" +
 		" --publish 127.0.0.1:18081:80/tcp --publish 5353:53/udp" +
 		" --cap-add CAP_NET_RAW --cap-drop CAP_MKNOD" +
-		" --platform linux/arm64 --user 1000:1000 --shm-size 128M --scheme http --read-only --init --no-dns" +
+		" --platform linux/arm64 --user 1000:1000 --shm-size 128M --scheme http" +
+		" --kernel /k/vmlinux --init-image vminit:1 --runtime container-runtime-linux --read-only --init --no-dns --virtualization" +
 		" --ulimit nofile=1024:2048 --publish-socket /host/s.sock:/run/s.sock" +
+		" --kernel-arg quiet --kernel-arg loglevel=3 --read-only-path /opt --masked-path NONE --masked-path /secret" +
 		" --entrypoint /bin/sh docker.io/library/busybox:1.37 -c sleep 3600"
 	if got != want {
 		t.Errorf("got  %q\nwant %q", got, want)

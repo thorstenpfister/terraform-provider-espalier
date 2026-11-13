@@ -38,6 +38,18 @@ type ContainerSpec struct {
 	Ulimits        []Ulimit
 	PublishSockets []Socket
 	Scheme         string // registry scheme for pulling the image, "http" or "https"; not recorded
+
+	// Kernel, KernelArgs and InitImage are not reported.
+	Kernel         string   // host path of a custom kernel
+	KernelArgs     []string // appended to the kernel command line
+	InitImage      string   // custom init (vminit) image
+	Runtime        string   // runtime handler; empty for container-runtime-<os>
+	Virtualization bool     // expose virtualization to the container
+	// ReadOnlyPaths and MaskedPaths are added to the runtime's defaults, or
+	// replace them after a "NONE". Reported: the effective paths, nil while
+	// the defaults apply.
+	ReadOnlyPaths []string
+	MaskedPaths   []string
 }
 
 // DNS is a container's resolver configuration. Zero values are the
@@ -179,11 +191,15 @@ type containerJSON struct {
 			SearchDomains []string `json:"searchDomains"`
 			Options       []string `json:"options"`
 		} `json:"dns"`
-		ReadOnly         bool  `json:"readOnly"`
-		UseInit          bool  `json:"useInit"`
-		Rosetta          bool  `json:"rosetta"`
-		SSH              bool  `json:"ssh"`
-		ShmSize          int64 `json:"shmSize"`
+		ReadOnly         bool     `json:"readOnly"`
+		UseInit          bool     `json:"useInit"`
+		Rosetta          bool     `json:"rosetta"`
+		SSH              bool     `json:"ssh"`
+		ShmSize          int64    `json:"shmSize"`
+		RuntimeHandler   string   `json:"runtimeHandler"`
+		Virtualization   bool     `json:"virtualization"`
+		ReadonlyPaths    []string `json:"readonlyPaths"`
+		MaskedPaths      []string `json:"maskedPaths"`
 		PublishedSockets []struct {
 			ContainerPath string `json:"containerPath"`
 			HostPath      string `json:"hostPath"`
@@ -288,10 +304,16 @@ func (spec ContainerSpec) optionArgs() []string {
 	flag("--user", spec.User)
 	flag("--shm-size", spec.ShmSize)
 	flag("--scheme", spec.Scheme)
+	flag("--kernel", spec.Kernel)
+	flag("--init-image", spec.InitImage)
+	flag("--runtime", spec.Runtime)
 	for _, f := range []struct {
 		name string
 		on   bool
-	}{{"--read-only", spec.ReadOnly}, {"--init", spec.Init}, {"--rosetta", spec.Rosetta}, {"--ssh", spec.SSH}, {"--no-dns", spec.NoDNS}} {
+	}{
+		{"--read-only", spec.ReadOnly}, {"--init", spec.Init}, {"--rosetta", spec.Rosetta}, {"--ssh", spec.SSH},
+		{"--no-dns", spec.NoDNS}, {"--virtualization", spec.Virtualization},
+	} {
 		if f.on {
 			args = append(args, f.name)
 		}
@@ -311,6 +333,14 @@ func (spec ContainerSpec) optionArgs() []string {
 	}
 	for _, s := range spec.PublishSockets {
 		args = append(args, "--publish-socket", s.HostPath+":"+s.ContainerPath)
+	}
+	for _, list := range []struct {
+		flag   string
+		values []string
+	}{{"--kernel-arg", spec.KernelArgs}, {"--read-only-path", spec.ReadOnlyPaths}, {"--masked-path", spec.MaskedPaths}} {
+		for _, v := range list.values {
+			args = append(args, list.flag, v)
+		}
 	}
 	return args
 }
@@ -372,6 +402,8 @@ func (j containerJSON) container(images []imageJSON) Container {
 	}
 	ctr.Platform = cfg.Platform.String()
 	ctr.ReadOnly, ctr.Init, ctr.Rosetta, ctr.SSH = cfg.ReadOnly, cfg.UseInit, cfg.Rosetta, cfg.SSH
+	ctr.Runtime, ctr.Virtualization = cfg.RuntimeHandler, cfg.Virtualization
+	ctr.ReadOnlyPaths, ctr.MaskedPaths = cfg.ReadonlyPaths, cfg.MaskedPaths
 	switch u := cfg.InitProcess.User; {
 	case u.Raw != nil:
 		ctr.User = u.Raw.UserString
