@@ -18,7 +18,6 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/booldefault"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/int64planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/listplanmodifier"
-	"github.com/hashicorp/terraform-plugin-framework/resource/schema/mapplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
@@ -146,6 +145,7 @@ func (r *containerResource) Schema(_ context.Context, _ resource.SchemaRequest, 
 				ElementType: types.StringType,
 				Optional:    true,
 				Computed:    true,
+				Validators:  []validator.List{listvalidator.SizeAtLeast(1)},
 				PlanModifiers: []planmodifier.List{
 					listplanmodifier.RequiresReplaceIfConfigured(), listplanmodifier.UseStateForUnknown(),
 				},
@@ -154,7 +154,7 @@ func (r *containerResource) Schema(_ context.Context, _ resource.SchemaRequest, 
 				MarkdownDescription: "Environment variables, on top of the image's environment.",
 				ElementType:         types.StringType,
 				Optional:            true,
-				PlanModifiers:       []planmodifier.Map{mapplanmodifier.RequiresReplace()},
+				PlanModifiers:       replaceMap,
 			},
 			"workdir": schema.StringAttribute{
 				MarkdownDescription: "Working directory of the process. Defaults to the image's, else `/`.",
@@ -186,7 +186,7 @@ func (r *containerResource) Schema(_ context.Context, _ resource.SchemaRequest, 
 				MarkdownDescription: "Labels attached to the container.",
 				ElementType:         types.StringType,
 				Optional:            true,
-				PlanModifiers:       []planmodifier.Map{mapplanmodifier.RequiresReplace()},
+				PlanModifiers:       replaceMap,
 			},
 			"running": schema.BoolAttribute{
 				MarkdownDescription: "Whether the container should run. Changes start or stop it in place; a container " +
@@ -215,6 +215,7 @@ func (r *containerResource) Schema(_ context.Context, _ resource.SchemaRequest, 
 	}
 	maps.Copy(resp.Schema.Attributes, attachmentAttributes())
 	maps.Copy(resp.Schema.Attributes, optionAttributes())
+	resp.Schema.Attributes = withSchemaRules(resp.Schema.Attributes)
 }
 
 func (r *containerResource) ValidateConfig(ctx context.Context, req resource.ValidateConfigRequest, resp *resource.ValidateConfigResponse) {
@@ -365,6 +366,7 @@ func (r *containerResource) read(ctx context.Context, name string, prior contain
 	keepWrittenOptions(prior, &m)
 	keepWrittenEntrypoint(ctx, c, prior, &m, diags)
 	diags.Append(st.Set(ctx, &m)...)
+	keepEmptyCollections(ctx, st, &prior, diags)
 }
 
 // containerValue is the container as the runtime reports it: the image
@@ -464,8 +466,8 @@ func (r *containerResource) ModifyPlan(ctx context.Context, req resource.ModifyP
 			resp.RequiresReplace = append(resp.RequiresReplace, path.Root("image"))
 		}
 	}
-	replaceChangedAttachments(plan, state, resp)
-	replaceChangedOptions(plan, state, resp)
+	replaceChangedAttachments(ctx, plan, state, resp)
+	replaceChangedOptions(ctx, plan, state, resp)
 	if !plan.Memory.Equal(state.Memory) {
 		a, okA := parseSize(state.Memory.ValueString())
 		b, okB := parseSize(plan.Memory.ValueString())

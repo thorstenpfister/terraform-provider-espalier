@@ -85,6 +85,7 @@ func (r *imageResource) Schema(_ context.Context, _ resource.SchemaRequest, resp
 			},
 		},
 	}
+	resp.Schema.Attributes = withSchemaRules(resp.Schema.Attributes)
 }
 
 func (r *imageResource) Configure(_ context.Context, req resource.ConfigureRequest, resp *resource.ConfigureResponse) {

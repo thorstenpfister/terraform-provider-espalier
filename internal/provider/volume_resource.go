@@ -11,7 +11,6 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/int64planmodifier"
-	"github.com/hashicorp/terraform-plugin-framework/resource/schema/mapplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
@@ -78,13 +77,13 @@ func (r *volumeResource) Schema(_ context.Context, _ resource.SchemaRequest, res
 				MarkdownDescription: "Labels attached to the volume.",
 				ElementType:         types.StringType,
 				Optional:            true,
-				PlanModifiers:       []planmodifier.Map{mapplanmodifier.RequiresReplace()},
+				PlanModifiers:       replaceMap,
 			},
 			"options": schema.MapAttribute{
 				MarkdownDescription: "Driver-specific options (`--opt key=value`). Use `size` for the size, not an option.",
 				ElementType:         types.StringType,
 				Optional:            true,
-				PlanModifiers:       []planmodifier.Map{mapplanmodifier.RequiresReplace()},
+				PlanModifiers:       replaceMap,
 				Validators:          []validator.Map{mapvalidator.KeysAre(stringvalidator.NoneOf("size"))},
 			},
 			"size_bytes": schema.Int64Attribute{
@@ -104,6 +103,7 @@ func (r *volumeResource) Schema(_ context.Context, _ resource.SchemaRequest, res
 			},
 		},
 	}
+	resp.Schema.Attributes = withSchemaRules(resp.Schema.Attributes)
 }
 
 func (r *volumeResource) Configure(_ context.Context, req resource.ConfigureRequest, resp *resource.ConfigureResponse) {
@@ -142,7 +142,11 @@ func (r *volumeResource) Read(ctx context.Context, req resource.ReadRequest, res
 }
 
 // Update is never called: every argument requires replacement.
-func (r *volumeResource) Update(context.Context, resource.UpdateRequest, *resource.UpdateResponse) {}
+func (r *volumeResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
+	// Every other change replaces it; only an empty collection written in
+	// place of an unset one (or back) gets here.
+	resp.State.Raw = req.Plan.Raw
+}
 
 func (r *volumeResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
 	var state volumeModel
@@ -181,6 +185,7 @@ func (r *volumeResource) read(ctx context.Context, name string, prior volumeMode
 	}
 	m := volumeValue(ctx, v, prior, diags)
 	diags.Append(st.Set(ctx, &m)...)
+	keepEmptyCollections(ctx, st, &prior, diags)
 }
 
 // volumeValue is the volume as the runtime reports it; maps left unset in

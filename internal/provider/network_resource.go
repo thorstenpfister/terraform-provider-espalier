@@ -9,7 +9,6 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/booldefault"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/boolplanmodifier"
-	"github.com/hashicorp/terraform-plugin-framework/resource/schema/mapplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
@@ -88,7 +87,7 @@ func (r *networkResource) Schema(_ context.Context, _ resource.SchemaRequest, re
 				MarkdownDescription: "Labels attached to the network.",
 				ElementType:         types.StringType,
 				Optional:            true,
-				PlanModifiers:       []planmodifier.Map{mapplanmodifier.RequiresReplace()},
+				PlanModifiers:       replaceMap,
 			},
 			"plugin": schema.StringAttribute{
 				MarkdownDescription: "Network plugin (`--plugin`). Defaults to the runtime's, `container-network-vmnet`.",
@@ -100,7 +99,7 @@ func (r *networkResource) Schema(_ context.Context, _ resource.SchemaRequest, re
 				MarkdownDescription: "Plugin-specific options (`--option key=value`).",
 				ElementType:         types.StringType,
 				Optional:            true,
-				PlanModifiers:       []planmodifier.Map{mapplanmodifier.RequiresReplace()},
+				PlanModifiers:       replaceMap,
 			},
 			"gateway": schema.StringAttribute{
 				MarkdownDescription: "IPv4 gateway address of the network.",
@@ -109,6 +108,7 @@ func (r *networkResource) Schema(_ context.Context, _ resource.SchemaRequest, re
 			},
 		},
 	}
+	resp.Schema.Attributes = withSchemaRules(resp.Schema.Attributes)
 }
 
 func (r *networkResource) Configure(_ context.Context, req resource.ConfigureRequest, resp *resource.ConfigureResponse) {
@@ -153,7 +153,11 @@ func (r *networkResource) Read(ctx context.Context, req resource.ReadRequest, re
 }
 
 // Update is never called: every argument requires replacement.
-func (r *networkResource) Update(context.Context, resource.UpdateRequest, *resource.UpdateResponse) {}
+func (r *networkResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
+	// Every other change replaces it; only an empty collection written in
+	// place of an unset one (or back) gets here.
+	resp.State.Raw = req.Plan.Raw
+}
 
 func (r *networkResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
 	var state networkModel
@@ -192,6 +196,7 @@ func (r *networkResource) read(ctx context.Context, name string, prior networkMo
 	}
 	m := networkValue(ctx, n, prior, diags)
 	diags.Append(st.Set(ctx, &m)...)
+	keepEmptyCollections(ctx, st, &prior, diags)
 }
 
 // networkValue is the network as the runtime reports it; maps left unset in

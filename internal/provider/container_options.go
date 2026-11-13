@@ -14,7 +14,6 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/booldefault"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/boolplanmodifier"
-	"github.com/hashicorp/terraform-plugin-framework/resource/schema/listplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
@@ -75,9 +74,7 @@ func optionAttributes() map[string]schema.Attribute {
 			PlanModifiers:       []planmodifier.Bool{boolplanmodifier.RequiresReplace()},
 		}
 	}
-	nonEmpty := []validator.List{listvalidator.SizeAtLeast(1)}
 	replaceString := []planmodifier.String{stringplanmodifier.RequiresReplace()}
-	replaceList := []planmodifier.List{listplanmodifier.RequiresReplace()}
 	protectedPaths := func(what, defaults string) schema.ListAttribute {
 		return schema.ListAttribute{
 			MarkdownDescription: "**Experimental in the runtime.** Absolute paths in the container to " + what + ", in " +
@@ -86,7 +83,7 @@ func optionAttributes() map[string]schema.Attribute {
 			ElementType:   types.StringType,
 			Optional:      true,
 			PlanModifiers: replaceList,
-			Validators:    []validator.List{listvalidator.SizeAtLeast(1), listvalidator.ValueStringsAre(protectedPath)},
+			Validators:    []validator.List{listvalidator.ValueStringsAre(protectedPath)},
 		}
 	}
 	return map[string]schema.Attribute{
@@ -118,14 +115,14 @@ func optionAttributes() map[string]schema.Attribute {
 			Optional:            true,
 			Attributes: map[string]schema.Attribute{
 				"nameservers": schema.ListAttribute{
-					MarkdownDescription: "Nameserver IP addresses.", ElementType: types.StringType, Optional: true, Validators: nonEmpty,
+					MarkdownDescription: "Nameserver IP addresses.", ElementType: types.StringType, Optional: true,
 				},
 				"domain": schema.StringAttribute{MarkdownDescription: "Default domain.", Optional: true},
 				"search_domains": schema.ListAttribute{
-					MarkdownDescription: "Search domains.", ElementType: types.StringType, Optional: true, Validators: nonEmpty,
+					MarkdownDescription: "Search domains.", ElementType: types.StringType, Optional: true,
 				},
 				"options": schema.ListAttribute{
-					MarkdownDescription: "Resolver options, e.g. `ndots:2`.", ElementType: types.StringType, Optional: true, Validators: nonEmpty,
+					MarkdownDescription: "Resolver options, e.g. `ndots:2`.", ElementType: types.StringType, Optional: true,
 				},
 			},
 		},
@@ -170,7 +167,6 @@ func optionAttributes() map[string]schema.Attribute {
 			ElementType:         types.StringType,
 			Optional:            true,
 			PlanModifiers:       replaceList,
-			Validators:          nonEmpty,
 		},
 		"init_image": schema.StringAttribute{
 			MarkdownDescription: "Image of the VM's init system, instead of the runtime's `vminit` image. Not reported, like `kernel`.",
@@ -317,13 +313,13 @@ func keepWrittenOptions(prior containerModel, m *containerModel) {
 
 // replaceChangedOptions replaces the container when an option changes. It
 // runs after the attribute plan modifiers.
-func replaceChangedOptions(plan, state containerModel, resp *resource.ModifyPlanResponse) {
+func replaceChangedOptions(ctx context.Context, plan, state containerModel, resp *resource.ModifyPlanResponse) {
 	for name, values := range map[string][2]attr.Value{
 		"dns":             {plan.DNS, state.DNS},
 		"ulimits":         {plan.Ulimits, state.Ulimits},
 		"publish_sockets": {plan.PublishSockets, state.PublishSockets},
 	} {
-		if !values[0].Equal(values[1]) {
+		if !sameOrEmpty(ctx, values[0], values[1]) {
 			resp.RequiresReplace = append(resp.RequiresReplace, path.Root(name))
 		}
 	}

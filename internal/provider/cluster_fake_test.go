@@ -133,3 +133,67 @@ resource "espalier_cluster" "test" {
 		t.Errorf("created %d clusters, want 3 (the first and two replacements)", fake.created)
 	}
 }
+
+// No workers, written as an empty list or left out, is the same cluster.
+func TestClusterEmptyWorkers(t *testing.T) {
+	fake := &fakeClusterClient{clusters: map[string]*client.Cluster{}}
+	factories := map[string]func() (tfprotov6.ProviderServer, error){
+		"espalier": providerserver.NewProtocol6WithError(&espalierProvider{version: "test", client: fake}),
+	}
+	config := func(workers string) string {
+		return fmt.Sprintf("resource \"espalier_cluster\" \"test\" {\n  name = \"fake\"\n  %s\n}", workers)
+	}
+	inPlace := resource.ConfigPlanChecks{PreApply: []plancheck.PlanCheck{
+		plancheck.ExpectResourceAction("espalier_cluster.test", plancheck.ResourceActionUpdate),
+	}}
+	resource.UnitTest(t, resource.TestCase{
+		ProtoV6ProviderFactories: factories,
+		Steps: []resource.TestStep{
+			{Config: config("workers = []")},
+			{Config: config(""), ConfigPlanChecks: inPlace},
+			{Config: config("workers = []"), ConfigPlanChecks: inPlace},
+		},
+	})
+	if fake.created != 1 {
+		t.Errorf("created %d clusters, want 1", fake.created)
+	}
+}
+
+// Sizes taken from other resources are unknown while planning: creating
+// works, and a change of them, unknown until applied, replaces the cluster.
+func TestClusterUnknownValues(t *testing.T) {
+	fake := &fakeClusterClient{clusters: map[string]*client.Cluster{}}
+	factories := map[string]func() (tfprotov6.ProviderServer, error){
+		"espalier": providerserver.NewProtocol6WithError(&espalierProvider{version: "test", client: fake}),
+	}
+	config := func(memory string) string {
+		return fmt.Sprintf(`
+resource "terraform_data" "v" {
+  input = { name = "fake", cpus = 2, workers = 1 }
+}
+
+resource "terraform_data" "memory" {
+  input = %q
+}
+
+resource "espalier_cluster" "test" {
+  name    = terraform_data.v.output.name
+  cpus    = terraform_data.v.output.cpus
+  memory  = terraform_data.memory.output
+  workers = [{ count = terraform_data.v.output.workers, cpus = 2, memory = terraform_data.memory.output }]
+  cni     = "NONE"
+}`, memory)
+	}
+	resource.UnitTest(t, resource.TestCase{
+		ProtoV6ProviderFactories: factories,
+		Steps: []resource.TestStep{
+			{Config: config("2G")},
+			{
+				Config: config("2048M"),
+				ConfigPlanChecks: resource.ConfigPlanChecks{PreApply: []plancheck.PlanCheck{
+					plancheck.ExpectResourceAction("espalier_cluster.test", plancheck.ResourceActionDestroyBeforeCreate),
+				}},
+			},
+		},
+	})
+}

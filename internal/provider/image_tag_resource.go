@@ -69,6 +69,7 @@ func (r *imageTagResource) Schema(_ context.Context, _ resource.SchemaRequest, r
 			},
 		},
 	}
+	resp.Schema.Attributes = withSchemaRules(resp.Schema.Attributes)
 }
 
 func (r *imageTagResource) Configure(_ context.Context, req resource.ConfigureRequest, resp *resource.ConfigureResponse) {

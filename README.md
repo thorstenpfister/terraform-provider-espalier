@@ -81,6 +81,19 @@ The provider talks to the runtime only through a small client interface
 `container` CLI and its JSON output, so a native API client can replace it
 later without changing the provider.
 
+Arguments follow a few rules, so modules can pass variables straight
+through:
+
+- An empty list, set or map means the same as leaving it out, and so does a
+  block such as `dns` with nothing but empty values. Switching between the
+  two never replaces anything.
+- Where leaving an argument out means a default (e.g. `command`,
+  `entrypoint`, `networks`), an empty list is rejected: use `null`.
+- Empty strings, negative numbers and `null` elements in collections are
+  rejected when validating.
+- Values known only after another resource is applied work everywhere; a
+  change of one replaces what it would replace if known.
+
 ## Development
 
 ```sh

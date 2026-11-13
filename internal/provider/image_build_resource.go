@@ -108,7 +108,7 @@ func (r *imageBuildResource) Schema(_ context.Context, _ resource.SchemaRequest,
 					"for a multi-platform image. Defaults to the host's.",
 				ElementType: types.StringType,
 				Optional:    true,
-				Validators:  []validator.List{listvalidator.SizeAtLeast(1), listvalidator.UniqueValues()},
+				Validators:  []validator.List{listvalidator.UniqueValues()},
 			},
 			"labels": schema.MapAttribute{
 				MarkdownDescription: "Labels added to the image.",
@@ -177,6 +177,7 @@ func (r *imageBuildResource) Schema(_ context.Context, _ resource.SchemaRequest,
 			},
 		},
 	}
+	resp.Schema.Attributes = withSchemaRules(resp.Schema.Attributes)
 }
 
 func (r *imageBuildResource) Configure(_ context.Context, req resource.ConfigureRequest, resp *resource.ConfigureResponse) {
@@ -213,7 +214,7 @@ func (r *imageBuildResource) ModifyPlan(ctx context.Context, req resource.Modify
 		var planned, prior attr.Value
 		resp.Diagnostics.Append(req.Plan.GetAttribute(ctx, path.Root(name), &planned)...)
 		resp.Diagnostics.Append(req.State.GetAttribute(ctx, path.Root(name), &prior)...)
-		rebuild = rebuild || !planned.Equal(prior)
+		rebuild = rebuild || !sameOrEmpty(ctx, planned, prior)
 	}
 	plan.ID, plan.Digest = state.ID, state.Digest
 	if rebuild {

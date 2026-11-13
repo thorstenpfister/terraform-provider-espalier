@@ -9,7 +9,6 @@ import (
 
 	"github.com/hashicorp/terraform-plugin-framework-timeouts/resource/timeouts"
 	"github.com/hashicorp/terraform-plugin-framework-validators/int64validator"
-	"github.com/hashicorp/terraform-plugin-framework-validators/listvalidator"
 	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
 	"github.com/hashicorp/terraform-plugin-framework/attr"
 	"github.com/hashicorp/terraform-plugin-framework/diag"
@@ -161,8 +160,7 @@ func (r *clusterResource) Schema(ctx context.Context, _ resource.SchemaRequest, 
 				MarkdownDescription: "Groups of equally sized worker nodes. Without workers, the control-plane node " +
 					"runs workloads too.",
 				Optional:      true,
-				PlanModifiers: []planmodifier.List{listplanmodifier.RequiresReplace()},
-				Validators:    []validator.List{listvalidator.SizeAtLeast(1)},
+				PlanModifiers: replaceList,
 				NestedObject: schema.NestedAttributeObject{Attributes: map[string]schema.Attribute{
 					"count": schema.Int64Attribute{
 						MarkdownDescription: "Number of workers. Defaults to 1.",
@@ -233,6 +231,7 @@ func (r *clusterResource) Schema(ctx context.Context, _ resource.SchemaRequest, 
 			"timeouts": timeouts.Block(ctx, timeouts.Opts{Create: true}),
 		},
 	}
+	resp.Schema.Attributes = withSchemaRules(resp.Schema.Attributes)
 }
 
 func (r *clusterResource) Configure(_ context.Context, req resource.ConfigureRequest, resp *resource.ConfigureResponse) {
@@ -407,6 +406,7 @@ func (r *clusterResource) read(ctx context.Context, prior clusterModel, st *tfsd
 		}
 	}
 	diags.Append(st.Set(ctx, &m)...)
+	keepEmptyCollections(ctx, st, &prior, diags)
 }
 
 func splitNodes(nodes []client.ClusterNode) (controlPlane *client.ClusterNode, workers []client.ClusterNode) {

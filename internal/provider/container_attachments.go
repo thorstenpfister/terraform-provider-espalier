@@ -98,7 +98,6 @@ func attachmentAttributes() map[string]schema.Attribute {
 						"qualified, e.g. `api.example.test`.",
 					ElementType: types.StringType,
 					Optional:    true,
-					Validators:  []validator.List{listvalidator.SizeAtLeast(1)},
 				},
 			}},
 		},
@@ -269,7 +268,7 @@ func readAttachments(ctx context.Context, c *client.Container, m *containerModel
 // replaceChangedAttachments replaces the container when an attachment
 // changes. It runs after the attribute plan modifiers, so computed values
 // (MTUs, defaults) are already filled in from state.
-func replaceChangedAttachments(plan, state containerModel, resp *resource.ModifyPlanResponse) {
+func replaceChangedAttachments(ctx context.Context, plan, state containerModel, resp *resource.ModifyPlanResponse) {
 	for name, values := range map[string][2]attr.Value{
 		"networks": {plan.Networks, state.Networks},
 		"mounts":   {plan.Mounts, state.Mounts},
@@ -277,7 +276,7 @@ func replaceChangedAttachments(plan, state containerModel, resp *resource.Modify
 		"cap_add":  {plan.CapAdd, state.CapAdd},
 		"cap_drop": {plan.CapDrop, state.CapDrop},
 	} {
-		if !values[0].Equal(values[1]) {
+		if !sameOrEmpty(ctx, values[0], values[1]) {
 			resp.RequiresReplace = append(resp.RequiresReplace, path.Root(name))
 		}
 	}

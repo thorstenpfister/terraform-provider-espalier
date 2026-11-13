@@ -51,6 +51,10 @@ data "espalier_image" "built" {
   depends_on = [espalier_image_build.test]
 }`, provider, dir, tag, extra)
 	}
+	notRebuilt := resource.ConfigPlanChecks{PreApply: []plancheck.PlanCheck{
+		plancheck.ExpectResourceAction(addr, plancheck.ResourceActionUpdate),
+		plancheck.ExpectKnownValue(addr, tfjsonpath.New("digest"), knownvalue.NotNull()),
+	}}
 	rebuilds := resource.ConfigPlanChecks{PreApply: []plancheck.PlanCheck{plancheck.ExpectResourceAction(addr, plancheck.ResourceActionUpdate)}}
 	digests := statecheck.CompareValue(compare.ValuesDiffer())
 	stopBuilderUntilCleanup(t)
@@ -80,6 +84,14 @@ data "espalier_image" "built" {
 					PreApply: []plancheck.PlanCheck{plancheck.ExpectEmptyPlan()},
 				},
 			},
+			// Empty collections are the same as unset ones: no rebuild.
+			{
+				Config: config("", `labels = {}
+  platforms = []
+  triggers  = {}`, builtTag),
+				ConfigPlanChecks: notRebuilt,
+			},
+			{Config: config("", "", builtTag), ConfigPlanChecks: notRebuilt},
 			// A file the build reads rebuilds it, in place.
 			{
 				PreConfig:        func() { writeFile(t, dir, "file.txt", "changed") },

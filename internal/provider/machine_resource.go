@@ -172,6 +172,7 @@ func (r *machineResource) Schema(_ context.Context, _ resource.SchemaRequest, re
 			"disk_size": schema.Int64Attribute{MarkdownDescription: "Disk space the machine uses, in bytes.", Computed: true},
 		},
 	}
+	resp.Schema.Attributes = withSchemaRules(resp.Schema.Attributes)
 }
 
 func (r *machineResource) ValidateConfig(ctx context.Context, req resource.ValidateConfigRequest, resp *resource.ValidateConfigResponse) {
