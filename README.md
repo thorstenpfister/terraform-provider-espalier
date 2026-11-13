@@ -22,9 +22,10 @@ Early development. Available today:
 | Resource | `espalier_volume` | Disk-image volume, optional size, labels; import by name |
 | Resource | `espalier_image` | Pulled image, optional platform, `keep_locally`; import by reference |
 | Data source | `espalier_image` | Image already in the runtime: digest, platforms |
+| Resource | `espalier_container` | Image, command, env, workdir, CPUs, memory, labels, running state, addresses; import by name |
 
-Planned for v1: resource `espalier_container` (with import) and data source
-`espalier_container`.
+Planned for v1: networks, mounts, published ports and capabilities on `espalier_container`, and the
+`espalier_container` data source.
 
 ## Requirements
 

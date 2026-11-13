@@ -27,6 +27,16 @@ type Client interface {
 	// it has not been pulled.
 	Image(ctx context.Context, reference string) (*Image, error)
 	DeleteImage(ctx context.Context, name string) error
+	// ImageName returns the fully qualified name a reference resolves to.
+	ImageName(ctx context.Context, reference string) (string, error)
+
+	CreateContainer(ctx context.Context, spec ContainerSpec) error
+	StartContainer(ctx context.Context, name string) error
+	StopContainer(ctx context.Context, name string) error
+	// Container returns nil, without an error, if the container does not exist.
+	Container(ctx context.Context, name string) (*Container, error)
+	// DeleteContainer deletes the container, stopping it first if it runs.
+	DeleteContainer(ctx context.Context, name string) error
 }
 
 // System describes the runtime on this host.

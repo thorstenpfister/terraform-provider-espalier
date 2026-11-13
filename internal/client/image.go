@@ -30,11 +30,10 @@ type imageJSON struct {
 		} `json:"descriptor"`
 	} `json:"configuration"`
 	Variants []struct {
-		Platform struct {
-			OS           string `json:"os"`
-			Architecture string `json:"architecture"`
-			Variant      string `json:"variant"`
-		} `json:"platform"`
+		Platform platformJSON `json:"platform"`
+		Config   struct {
+			Config imageDefaults `json:"config"`
+		} `json:"config"`
 	} `json:"variants"`
 }
 
@@ -50,11 +49,10 @@ func (c CLI) PullImage(ctx context.Context, spec ImageSpec) error {
 // Image returns the local image a reference resolves to, or nil if it has
 // not been pulled.
 func (c CLI) Image(ctx context.Context, reference string) (*Image, error) {
-	domain, err := c.defaultRegistry(ctx)
+	name, err := c.ImageName(ctx, reference)
 	if err != nil {
 		return nil, err
 	}
-	name := NormalizeReference(reference, domain)
 	var list []imageJSON
 	if err := c.json(ctx, &list, "image", "list", "--format", "json"); err != nil {
 		return nil, err
@@ -65,15 +63,9 @@ func (c CLI) Image(ctx context.Context, reference string) (*Image, error) {
 		}
 		img := &Image{Name: name, Digest: i.Configuration.Descriptor.Digest}
 		for _, v := range i.Variants {
-			p := v.Platform
-			if p.OS == "unknown" { // attestation manifests
-				continue
+			if v.Platform.OS != "unknown" { // not attestation manifests
+				img.Platforms = append(img.Platforms, v.Platform.String())
 			}
-			platform := p.OS + "/" + p.Architecture
-			if p.Variant != "" {
-				platform += "/" + p.Variant
-			}
-			img.Platforms = append(img.Platforms, platform)
 		}
 		return img, nil
 	}
@@ -85,6 +77,15 @@ func (c CLI) DeleteImage(ctx context.Context, name string) error {
 		return fmt.Errorf("deleting image %s: %w", name, err)
 	}
 	return nil
+}
+
+// ImageName returns the fully qualified name a reference resolves to.
+func (c CLI) ImageName(ctx context.Context, reference string) (string, error) {
+	domain, err := c.defaultRegistry(ctx)
+	if err != nil {
+		return "", err
+	}
+	return NormalizeReference(reference, domain), nil
 }
 
 // defaultRegistry is the registry short references resolve to (the
