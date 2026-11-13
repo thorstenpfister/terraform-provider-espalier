@@ -1,5 +1,5 @@
 .DEFAULT_GOAL := help
-.PHONY: help build install test testacc testacc-tofu lint docs
+.PHONY: help build install test testacc testacc-tofu lint docs release-check
 
 help: ## Show targets
 	@awk 'BEGIN {FS = ":.*## "} /^[a-z-]+:.*## / {printf "  %-14s %s\n", $$1, $$2}' $(MAKEFILE_LIST)
@@ -25,3 +25,7 @@ lint: ## golangci-lint
 
 docs: ## Regenerate docs/ (tfplugindocs)
 	go generate ./...
+
+release-check: ## Validate the release config and build an unsigned snapshot into dist/
+	goreleaser check
+	goreleaser release --snapshot --clean --skip=sign,publish
