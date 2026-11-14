@@ -195,6 +195,7 @@ func TestAccContainerVM(t *testing.T) {
 // runtimeKernelAndInit returns the path of the runtime's default kernel and
 // a local vminit image.
 func runtimeKernelAndInit(t *testing.T) (string, string) {
+	skipUnlessAcc(t)
 	home, err := os.UserHomeDir()
 	if err != nil {
 		t.Fatal(err)
