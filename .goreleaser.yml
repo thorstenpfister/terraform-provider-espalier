@@ -53,7 +53,8 @@ release:
       name_template: "{{ .ProjectName }}_{{ .Version }}_manifest.json"
 
 changelog:
-  sort: asc
+  # Commit order with short hashes; sorting goes by message, not time.
+  abbrev: 7
   filters:
     exclude:
       - "^Merge "
