@@ -1,5 +1,10 @@
 # terraform-provider-espalier
 
+[![Terraform Registry](https://img.shields.io/badge/Terraform_Registry-thorstenpfister%2Fespalier-7B42BC?logo=terraform)](https://registry.terraform.io/providers/thorstenpfister/espalier/latest/docs)
+[![Release](https://img.shields.io/github/v/release/thorstenpfister/terraform-provider-espalier)](https://github.com/thorstenpfister/terraform-provider-espalier/releases/latest)
+[![test](https://github.com/thorstenpfister/terraform-provider-espalier/actions/workflows/test.yml/badge.svg)](https://github.com/thorstenpfister/terraform-provider-espalier/actions/workflows/test.yml)
+[![License](https://img.shields.io/github/license/thorstenpfister/terraform-provider-espalier)](LICENSE)
+
 A Terraform and OpenTofu provider for **Apple's [`container`](https://github.com/apple/container)
 runtime** on macOS: manage its networks, volumes, images, containers, machines
 and local Kubernetes clusters declaratively.
