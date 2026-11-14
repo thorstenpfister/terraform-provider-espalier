@@ -1,5 +1,5 @@
 .DEFAULT_GOAL := help
-.PHONY: help build install test testacc testacc-tofu lint docs release-check
+.PHONY: help build install test testacc testacc-tofu lint docs release-check tested-container-version
 
 help: ## Show targets
 	@awk 'BEGIN {FS = ":.*## "} /^[a-z-]+:.*## / {printf "  %-14s %s\n", $$1, $$2}' $(MAKEFILE_LIST)
@@ -28,4 +28,7 @@ docs: ## Regenerate docs/ (tfplugindocs)
 
 release-check: ## Validate the release config and build an unsigned snapshot into dist/
 	goreleaser check
-	goreleaser release --snapshot --clean --skip=sign,publish
+	TESTED_CONTAINER_VERSION=$$($(MAKE) -s tested-container-version) goreleaser release --snapshot --clean --skip=sign,publish
+
+tested-container-version: ## Print the container version this release is verified against
+	@sed -n 's/^const testedCLIVersion = "\(.*\)"$$/\1/p' internal/provider/provider.go

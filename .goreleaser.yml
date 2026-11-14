@@ -47,6 +47,7 @@ signs:
 release:
   # Published by hand after a look at the draft.
   draft: true
+  header: "Verified against Apple's `container` {{ .Env.TESTED_CONTAINER_VERSION }}; see the compatibility table in the README."
   extra_files:
     - glob: terraform-registry-manifest.json
       name_template: "{{ .ProjectName }}_{{ .Version }}_manifest.json"

@@ -13,10 +13,6 @@ import (
 // them from changing what was there before: images, the builder, the
 // default machine.
 
-// testedCLIVersion is the container version the provider was last verified
-// against; see "Upgrading the runtime" in the README.
-const testedCLIVersion = "1.7.1"
-
 // skipUnlessAcc skips outside acceptance runs, which have no runtime to
 // talk to; resource.Test does the same.
 func skipUnlessAcc(t *testing.T) {

@@ -27,6 +27,10 @@ type fakeClusterClient struct {
 	created  int
 }
 
+func (f *fakeClusterClient) Version(context.Context) (string, error) {
+	return testedCLIVersion, nil
+}
+
 func (f *fakeClusterClient) CreateCluster(_ context.Context, spec client.ClusterSpec) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()

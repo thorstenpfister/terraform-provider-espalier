@@ -4,6 +4,7 @@ package provider
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/hashicorp/terraform-plugin-framework-validators/int64validator"
 	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
@@ -18,6 +19,11 @@ import (
 )
 
 const defaultCLIPath = "container"
+
+// testedCLIVersion is the container version this provider release was
+// verified against; see "Compatibility" and "Upgrading the runtime" in the
+// README.
+const testedCLIVersion = "1.7.1"
 
 type espalierProvider struct {
 	version string
@@ -98,6 +104,14 @@ func (p *espalierProvider) Configure(ctx context.Context, req provider.Configure
 	var c client.Client = client.CLI{Run: client.ExecRunner(path)}
 	if p.client != nil {
 		c = p.client
+	}
+	// A CLI that cannot be run is left to the first call that needs it.
+	if v, err := c.Version(ctx); err == nil && v != testedCLIVersion {
+		resp.Diagnostics.AddWarning("Untested container version", fmt.Sprintf(
+			"container %s is installed, but this provider release was verified against %s. It may work, but the "+
+				"provider reads the CLI's output, which can change between versions. The compatibility table lists "+
+				"the release verified against yours: "+
+				"https://github.com/thorstenpfister/terraform-provider-espalier#compatibility", v, testedCLIVersion))
 	}
 	data := &providerData{client: c, builder: &builder{}}
 	if b := cfg.Builder; b != nil {

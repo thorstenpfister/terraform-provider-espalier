@@ -24,6 +24,11 @@ jobs:
         with:
           gpg_private_key: ${{ secrets.GPG_PRIVATE_KEY }}
           passphrase: ${{ secrets.GPG_PASSPHRASE }}
+      - name: container version for the release notes
+        run: |
+          v=$(make -s tested-container-version)
+          test -n "$v"
+          echo "TESTED_CONTAINER_VERSION=$v" >> "$GITHUB_ENV"
       - uses: goreleaser/goreleaser-action@a4f02ab5355a589de60d917a659ce617ed19b3de # v7.3.0
         with:
           version: v2.20.2

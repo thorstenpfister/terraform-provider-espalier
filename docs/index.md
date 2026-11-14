@@ -12,6 +12,11 @@ clusters. The provider drives the
 `container` command line tool, which must be installed; it never starts the
 runtime itself (`container system start`).
 
+Each provider release is verified against one `container` version and warns
+in every plan when another one is installed; the
+[compatibility table](https://github.com/thorstenpfister/terraform-provider-espalier#compatibility)
+lists them.
+
 **Why "espalier"?** An espalier is a fruit tree trained to grow flat along a
 frame: structure declared for something that grows on its own, which is what
 a configuration does for containers. The name also keeps clear of Apple's

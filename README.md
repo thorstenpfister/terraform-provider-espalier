@@ -51,6 +51,21 @@ Early development: nothing is released yet.
 - Terraform ≥ 1.5 or OpenTofu ≥ 1.6
 - Go (see `go.mod`) to build
 
+## Compatibility
+
+The provider reads the output of the `container` CLI, which can change
+between versions, so each release is verified against one `container`
+version. On another version it still runs, with a warning in every plan
+that names both versions.
+
+| Provider | Verified against `container` |
+|----------|------------------------------|
+| 0.1.0    | 1.7.1                        |
+
+Provider versions follow [semantic versioning](https://semver.org) of the
+provider's own schema and behaviour, independent of the runtime's version:
+while it is `0.x`, a minor release may change the schema.
+
 ## Usage
 
 ```hcl
@@ -128,8 +143,8 @@ deliberate check:
 3. Check whether upstream fixed what this provider works around or leaves out:
    registry logins ([#1733](https://github.com/apple/container/issues/1733)),
    `--shared-image-store` in Homebrew builds, `--quiet` builds.
-4. Update `testedCLIVersion` in `internal/provider/host_test.go` and the
-   version above.
+4. Update `testedCLIVersion` in `internal/provider/provider.go` and the
+   version above. The next release adds its row to the compatibility table.
 
 ## Releasing
 
@@ -179,10 +194,12 @@ and a check that `docs/` is up to date (`.github/workflows/test.yml`).
 
 1. On `main`, both acceptance suites green (`make testacc`,
    `make testacc-tofu`) on the tested runtime version.
-2. `git tag vX.Y.Z && git push origin vX.Y.Z`; the release workflow creates
-   a draft.
-3. Review the draft (four assets: zip, `SHA256SUMS`, its `.sig`, manifest)
-   and publish it. The Terraform Registry picks it up through its webhook,
+2. Add the release to the compatibility table, with `testedCLIVersion`
+   (`make -s tested-container-version`), and commit it.
+3. `git tag vX.Y.Z && git push origin vX.Y.Z`; the release workflow creates
+   a draft whose notes start with the verified `container` version.
+4. Review the draft (four assets: zip, `SHA256SUMS`, its `.sig`, manifest;
+   the version in the notes matches the table) and publish it. The Terraform Registry picks it up through its webhook,
    the OpenTofu Registry within the hour.
 
 ## License

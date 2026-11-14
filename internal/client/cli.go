@@ -63,21 +63,29 @@ type CLI struct {
 
 var _ Client = CLI{}
 
-func (c CLI) System(ctx context.Context) (System, error) {
+func (c CLI) Version(ctx context.Context) (string, error) {
 	var version []struct {
 		AppName string `json:"appName"`
 		Version string `json:"version"`
 	}
 	// `system version` reports the client even when the services are down.
 	if err := c.json(ctx, &version, "system", "version", "--format", "json"); err != nil {
-		return System{}, err
+		return "", err
 	}
-	var sys System
 	for _, v := range version {
 		if v.AppName == "container" {
-			sys.ClientVersion = v.Version
+			return v.Version, nil
 		}
 	}
+	return "", errors.New("container system version: no version for container")
+}
+
+func (c CLI) System(ctx context.Context) (System, error) {
+	v, err := c.Version(ctx)
+	if err != nil {
+		return System{}, err
+	}
+	sys := System{ClientVersion: v}
 
 	var status struct {
 		Status string `json:"status"`

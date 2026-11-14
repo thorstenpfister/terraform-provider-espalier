@@ -103,3 +103,11 @@ func TestParseMemorySize(t *testing.T) {
 		t.Error(`ParseMemorySize("lots"): no error`)
 	}
 }
+
+func TestVersion(t *testing.T) {
+	f := fakeRunner{"system version --format json": {out: versionJSON}}
+	got, err := CLI{Run: f.run}.Version(context.Background())
+	if err != nil || got != "1.7.1" {
+		t.Fatalf("got %q, %v", got, err)
+	}
+}
