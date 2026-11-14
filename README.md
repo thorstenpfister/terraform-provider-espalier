@@ -168,8 +168,9 @@ it from the `GPG_PRIVATE_KEY` and `GPG_PASSPHRASE` repository secrets.
 3. `git tag vX.Y.Z && git push origin vX.Y.Z`; the release workflow creates
    a draft whose notes start with the verified `container` version.
 4. Review the draft (four assets: zip, `SHA256SUMS`, its `.sig`, manifest;
-   the version in the notes matches the table) and publish it. The Terraform Registry picks it up through its webhook,
-   the OpenTofu Registry within the hour.
+   the version in the notes matches the table) and publish it. The
+   Terraform Registry picks it up through its webhook, the OpenTofu
+   Registry within the hour.
 
 ## License
 
