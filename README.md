@@ -143,12 +143,16 @@ and a check that `docs/` is up to date (`.github/workflows/test.yml`).
 ### One-time setup
 
 1. A dedicated RSA signing key (the Terraform Registry accepts only RSA and
-   DSA keys), its passphrase kept in the macOS Keychain:
+   DSA keys), its passphrase kept in the macOS Keychain. The key's user ID
+   is public through both registries, so it carries a name and no email. It
+   does not expire, since an expired key breaks downloads of every release
+   it signed; if it is compromised, revoke it with the certificate gpg
+   stores in `~/.gnupg/openpgp-revocs.d` and register a new one:
 
    ```sh
    security add-generic-password -a "$USER" -s espalier-release-gpg -w "$(openssl rand -base64 32)"
    gpg --batch --pinentry-mode loopback --passphrase "$(security find-generic-password -s espalier-release-gpg -w)" \
-     --quick-generate-key "espalier releases <you@example.com>" rsa4096 sign 3y
+     --quick-generate-key "espalier releases" rsa4096 sign never
    ```
 
    Back up the secret key offline: losing it means a new key in both
