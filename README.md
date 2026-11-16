@@ -17,9 +17,7 @@ and local Kubernetes clusters declaratively.
 
 espalier is not affiliated with or endorsed by Apple Inc.
 
-## Status
-
-Available today:
+## What it manages
 
 | Kind | Name | What |
 |---|---|---|
@@ -48,14 +46,11 @@ Out of scope: host-wide settings that no single configuration owns, such as the 
 need root. Imperative commands (`exec`, `cp`, `logs`, `prune`, …) have no place in a declarative
 provider.
 
-Early development: nothing is released yet.
-
 ## Requirements
 
 - macOS on Apple silicon with the `container` CLI installed and started
   (`container system start`)
 - Terraform ≥ 1.5 or OpenTofu ≥ 1.6
-- Go (see `go.mod`) to build
 
 ## Compatibility
 
@@ -78,7 +73,8 @@ while it is `0.x`, a minor release may change the schema.
 terraform {
   required_providers {
     espalier = {
-      source = "thorstenpfister/espalier"
+      source  = "thorstenpfister/espalier"
+      version = "~> 0.1"
     }
   }
 }
@@ -86,14 +82,13 @@ terraform {
 data "espalier_system" "this" {}
 ```
 
-Until the provider is published, build it and point Terraform at the binary
-with a [`dev_overrides`](https://developer.hashicorp.com/terraform/cli/config/config-file#development-overrides-for-provider-developers)
-block for `registry.terraform.io/thorstenpfister/espalier` (OpenTofu:
-`registry.opentofu.org/thorstenpfister/espalier`):
-
-```sh
-make install   # installs into $(go env GOPATH)/bin
-```
+The same source address works with Terraform and OpenTofu, which install the
+provider from their own registry. Every resource and data source is
+documented with examples on the
+[Terraform Registry](https://registry.terraform.io/providers/thorstenpfister/espalier/latest/docs)
+and the
+[OpenTofu Registry](https://search.opentofu.org/provider/thorstenpfister/espalier/latest),
+generated from `docs/`.
 
 ## How it works
 
@@ -117,7 +112,14 @@ through:
 
 ## Development
 
+Building needs Go (see `go.mod`). To try a local build, install it and point
+Terraform at it with a
+[`dev_overrides`](https://developer.hashicorp.com/terraform/cli/config/config-file#development-overrides-for-provider-developers)
+block for `registry.terraform.io/thorstenpfister/espalier` (OpenTofu:
+`registry.opentofu.org/thorstenpfister/espalier`):
+
 ```sh
+make install       # installs into $(go env GOPATH)/bin
 make test          # unit tests: no runtime needed, but Terraform on PATH
 make testacc       # acceptance tests against the local runtime (Terraform)
 make testacc-tofu  # the same with OpenTofu

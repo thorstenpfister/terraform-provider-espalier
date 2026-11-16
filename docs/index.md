@@ -30,7 +30,8 @@ espalier is not affiliated with or endorsed by Apple Inc.
 terraform {
   required_providers {
     espalier = {
-      source = "thorstenpfister/espalier"
+      source  = "thorstenpfister/espalier"
+      version = "~> 0.1"
     }
   }
 }

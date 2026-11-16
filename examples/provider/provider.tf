@@ -1,7 +1,8 @@
 terraform {
   required_providers {
     espalier = {
-      source = "thorstenpfister/espalier"
+      source  = "thorstenpfister/espalier"
+      version = "~> 0.1"
     }
   }
 }
