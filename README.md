@@ -1,6 +1,7 @@
 # terraform-provider-espalier
 
 [![Terraform Registry](https://img.shields.io/badge/Terraform_Registry-thorstenpfister%2Fespalier-7B42BC?logo=terraform)](https://registry.terraform.io/providers/thorstenpfister/espalier/latest/docs)
+[![OpenTofu Registry](https://img.shields.io/badge/OpenTofu_Registry-thorstenpfister%2Fespalier-FFDA18?logo=opentofu&logoColor=black)](https://search.opentofu.org/provider/thorstenpfister/espalier/latest)
 [![Release](https://img.shields.io/github/v/release/thorstenpfister/terraform-provider-espalier)](https://github.com/thorstenpfister/terraform-provider-espalier/releases/latest)
 [![test](https://github.com/thorstenpfister/terraform-provider-espalier/actions/workflows/test.yml/badge.svg)](https://github.com/thorstenpfister/terraform-provider-espalier/actions/workflows/test.yml)
 [![License](https://img.shields.io/github/license/thorstenpfister/terraform-provider-espalier)](LICENSE)
